@@ -11,7 +11,7 @@ import asyncio
 import datetime as dt
 from collections import defaultdict, deque
 
-import asyncpg
+import aiosqlite
 import discord
 from discord import app_commands
 from discord.ext import commands, tasks
@@ -22,17 +22,14 @@ from discord.ext import commands, tasks
 TOKEN = os.environ["DISCORD_TOKEN"]
 OWNER_ID = int(os.environ["OWNER_ID"])
 GUILD_ID = int(os.environ["GUILD_ID"]) if os.environ.get("GUILD_ID") else None
-DATABASE_URL = os.environ.get("DATABASE_URL", "").strip().strip("\"'").strip()
-if not DATABASE_URL.startswith(("postgres://", "postgresql://")):
-    # Fallback: aus den einzelnen PG-Variablen zusammenbauen, falls vorhanden
-    _h, _p = os.environ.get("PGHOST"), os.environ.get("PGPORT", "5432")
-    _u, _pw, _db = os.environ.get("PGUSER"), os.environ.get("PGPASSWORD"), os.environ.get("PGDATABASE")
-    if _h and _u and _pw and _db:
-        DATABASE_URL = f"postgresql://{_u}:{_pw}@{_h}:{_p}/{_db}"
-    else:
-        raise SystemExit(
-            "FEHLER: DATABASE_URL ist leer oder ungueltig. Sie muss mit postgresql:// beginnen. "
-            f"Aktueller Anfang: {DATABASE_URL[:15]!r} (Laenge {len(DATABASE_URL)})")
+# Datenbank liegt auf dem Railway-Volume (SQLite). Railway setzt den Pfad automatisch.
+VOLUME_PATH = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "")
+if VOLUME_PATH:
+    os.makedirs(VOLUME_PATH, exist_ok=True)
+    DB_PATH = os.path.join(VOLUME_PATH, "volt.db")
+else:
+    DB_PATH = "volt.db"
+    print("WARNUNG: Kein Volume erkannt, Daten gehen bei Neustart verloren!")
 DONATION_URL = os.environ.get("DONATION_URL", "")  # z.B. PayPal.me / Ko-fi Link
 
 MIN_ACCOUNT_AGE_DAYS = int(os.environ.get("MIN_ACCOUNT_AGE_DAYS", "3"))  # 0 = aus
@@ -52,7 +49,7 @@ intents.members = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
-pool: asyncpg.Pool = None  # wird im setup_hook gesetzt
+pool = None  # DB-Objekt, wird im setup_hook gesetzt
 
 
 # ===============================================================
@@ -242,20 +239,60 @@ def donate_view():
 # ===============================================================
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tickets (
-  id SERIAL PRIMARY KEY, channel_id BIGINT UNIQUE, user_id BIGINT NOT NULL,
+  id INTEGER PRIMARY KEY AUTOINCREMENT, channel_id INTEGER UNIQUE, user_id INTEGER NOT NULL,
   project_type TEXT, project_name TEXT, slug TEXT, description TEXT,
   platform TEXT, link TEXT, budget TEXT,
-  status TEXT NOT NULL DEFAULT 'open', price TEXT, offer_message_id BIGINT,
-  created_at TIMESTAMPTZ DEFAULT now());
+  status TEXT NOT NULL DEFAULT 'open', price TEXT, offer_message_id INTEGER,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS warns (
-  id SERIAL PRIMARY KEY, user_id BIGINT NOT NULL, mod_id BIGINT, reason TEXT,
-  created_at TIMESTAMPTZ DEFAULT now());
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, mod_id INTEGER, reason TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS blacklist (
-  user_id BIGINT PRIMARY KEY, reason TEXT, created_at TIMESTAMPTZ DEFAULT now());
+  user_id INTEGER PRIMARY KEY, reason TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS reviews (
-  id SERIAL PRIMARY KEY, ticket_id INT UNIQUE, user_id BIGINT, stars INT,
-  comment TEXT, created_at TIMESTAMPTZ DEFAULT now());
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER UNIQUE, user_id INTEGER, stars INTEGER,
+  comment TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 """
+
+
+class DB:
+    """Kleiner SQLite-Wrapper (Platzhalter $1, $2 ... wie bisher)."""
+
+    def __init__(self, path: str):
+        self.path = path
+        self.conn = None
+
+    async def connect(self):
+        self.conn = await aiosqlite.connect(self.path)
+        self.conn.row_factory = aiosqlite.Row
+        await self.conn.executescript(SCHEMA)
+        await self.conn.commit()
+
+    @staticmethod
+    def _q(q: str) -> str:
+        return re.sub(r"\$(\d+)", r"?\1", q)
+
+    async def execute(self, q, *args):
+        await self.conn.execute(self._q(q), args)
+        await self.conn.commit()
+
+    async def fetch(self, q, *args):
+        cur = await self.conn.execute(self._q(q), args)
+        rows = await cur.fetchall()
+        await cur.close()
+        await self.conn.commit()
+        return rows
+
+    async def fetchrow(self, q, *args):
+        cur = await self.conn.execute(self._q(q), args)
+        row = await cur.fetchone()
+        await cur.close()
+        await self.conn.commit()
+        return row
+
+    async def fetchval(self, q, *args):
+        row = await self.fetchrow(q, *args)
+        return row[0] if row else None
 
 
 async def get_ticket(channel_id: int):
@@ -912,7 +949,7 @@ async def warns_cmd(interaction: discord.Interaction, user: discord.Member):
     rows = await pool.fetch("SELECT * FROM warns WHERE user_id=$1 ORDER BY id", user.id)
     if not rows:
         return await interaction.response.send_message("Keine Warns. ✅", ephemeral=True)
-    text = "\n".join(f"#{i+1} · {r['created_at']:%d.%m.%Y} · {r['reason']}" for i, r in enumerate(rows))
+    text = "\n".join(f"#{i+1} · {str(r['created_at'])[:10]} · {r['reason']}" for i, r in enumerate(rows))
     await interaction.response.send_message(embed=emb(f"Warns von {user.display_name}", text), ephemeral=True)
 
 
@@ -1372,8 +1409,9 @@ async def _before_stats():
 @bot.event
 async def setup_hook():
     global pool
-    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=5)
-    await pool.execute(SCHEMA)
+    pool = DB(DB_PATH)
+    await pool.connect()
+    print(f"Datenbank: {DB_PATH}")
     for v in (VerifyView(), TicketPanelView(), AdminPanelView(), OfferView(), ReviewView(), FaqView()):
         bot.add_view(v)
     if GUILD_ID:
