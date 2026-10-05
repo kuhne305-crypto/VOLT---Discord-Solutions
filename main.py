@@ -1,6 +1,6 @@
 import os
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 TOKEN = os.environ["DISCORD_TOKEN"]
 OWNER_ID = int(os.environ["OWNER_ID"])
@@ -19,24 +19,26 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # ROLLEN (von oben nach unten = hoch nach niedrig)
 # ---------------------------------------------------------------
 ROLES = [
-    # name, farbe, permissions, hoist
-    ("👑 Owner", 0xF1C40F, discord.Permissions(administrator=True), True),
-    ("🛡️ Admin", 0xE74C3C, discord.Permissions(administrator=True), True),
-    ("🔧 Support", 0x3498DB, discord.Permissions(
+    # key, name, farbe, permissions, hoist
+    ("owner", "👑 Owner", 0xF1C40F, discord.Permissions(administrator=True), True),
+    ("admin", "🛡️ Admin", 0xE74C3C, discord.Permissions(administrator=True), True),
+    ("support", "🔧 Support", 0x3498DB, discord.Permissions(
         manage_messages=True, moderate_members=True, kick_members=True), True),
-    ("💼 Kunde", 0x2ECC71, discord.Permissions.none(), True),
-    ("✅ User", 0x95A5A6, discord.Permissions.none(), False),
-    ("🤖 Bots", 0x9B59B6, discord.Permissions.none(), False),
-    ("⛔ Unverifiziert", 0x7F8C8D, discord.Permissions.none(), False),
+    ("kunde", "💼 Kunde", 0x2ECC71, discord.Permissions.none(), True),
+    ("user", "✅ User", 0x95A5A6, discord.Permissions.none(), False),
+    ("bots", "🤖 Bots", 0x9B59B6, discord.Permissions.none(), False),
+    ("unverified", "⛔ Unverifiziert", 0x7F8C8D, discord.Permissions.none(), False),
 ]
+
+ROLE_CACHE: dict[int, dict[str, discord.Role]] = {}
 
 
 def find_role(guild: discord.Guild, key: str):
-    """Rolle anhand eines Teilnamens finden, z.B. 'Owner'."""
-    for r in guild.roles:
-        if key.lower() in r.name.lower():
-            return r
-    return None
+    cached = ROLE_CACHE.get(guild.id, {}).get(key)
+    if cached:
+        return cached
+    names = {k: n for k, n, *_ in ROLES}
+    return discord.utils.get(guild.roles, name=names.get(key))
 
 
 # ---------------------------------------------------------------
@@ -44,10 +46,10 @@ def find_role(guild: discord.Guild, key: str):
 # ---------------------------------------------------------------
 def build_overwrites(guild: discord.Guild, mode: str):
     everyone = guild.default_role
-    owner = find_role(guild, "Owner")
-    admin = find_role(guild, "Admin")
-    support = find_role(guild, "Support")
-    user = find_role(guild, "User")
+    owner = find_role(guild, "owner")
+    admin = find_role(guild, "admin")
+    support = find_role(guild, "support")
+    user = find_role(guild, "user")
     bot_member = guild.me
 
     see = discord.PermissionOverwrite(view_channel=True, read_message_history=True)
@@ -57,11 +59,14 @@ def build_overwrites(guild: discord.Guild, mode: str):
     bot_full = discord.PermissionOverwrite(
         view_channel=True, send_messages=True, manage_channels=True,
         manage_messages=True, read_message_history=True,
-        embed_links=True, attach_files=True)
+        embed_links=True, attach_files=True, connect=True)
 
     ow = {bot_member: bot_full}
 
-    if mode == "public":  # Willkommen-Bereich: jeder sieht, keiner schreibt
+    if mode == "info":  # Serverinfo: jeder sieht, keiner kann joinen
+        ow[everyone] = discord.PermissionOverwrite(view_channel=True, connect=False)
+
+    elif mode == "public":  # Willkommen-Bereich: jeder sieht, keiner schreibt
         ow[everyone] = discord.PermissionOverwrite(
             view_channel=True, read_message_history=True, send_messages=False)
 
@@ -71,21 +76,19 @@ def build_overwrites(guild: discord.Guild, mode: str):
             ow[user] = discord.PermissionOverwrite(
                 view_channel=True, read_message_history=True, send_messages=False)
 
-    elif mode == "team":  # Team-intern
+    elif mode == "team":
         ow[everyone] = hidden
         for r in (owner, admin, support):
             if r:
                 ow[r] = see_write
 
-    elif mode == "ticket":  # Tickets: NUR Owner/Admin (+ optional Support)
+    elif mode == "ticket":  # NUR Owner/Admin (+ optional Support)
         ow[everyone] = hidden
         for r in (owner, admin):
             if r:
                 ow[r] = see_write
         if SUPPORT_SEES_TICKETS and support:
             ow[support] = see_write
-        # Rollen "User" und "Kunde" bekommen hier bewusst NICHTS.
-        # Zugriff fuer den Ersteller kommt pro Channel (ticket_overwrites).
 
     elif mode == "admin":  # Logs
         ow[everyone] = hidden
@@ -116,6 +119,11 @@ def ticket_overwrites(guild: discord.Guild, creator: discord.Member):
 # (kategorie, modus, [ (channel, art) ])
 # ---------------------------------------------------------------
 STRUCTURE = [
+    ("━━━━━ 📊 SERVERINFO ━━━━━", "info", [
+        ("👥 Mitglieder: 0", "voice"),
+        ("🟢 Status: Online", "voice"),
+        ("⭐ Bewertungen: bald verfügbar", "voice"),
+    ]),
     ("━━━━━ 👋 WILLKOMMEN ━━━━━", "public", [
         ("📜│regeln", "text"),
         ("👋│willkommen", "text"),
@@ -153,6 +161,27 @@ STRUCTURE = [
 
 
 # ---------------------------------------------------------------
+# LIVE-MITGLIEDERZAHL (max. 1 Umbenennung pro 10 Minuten)
+# ---------------------------------------------------------------
+@tasks.loop(minutes=10)
+async def update_member_count():
+    for guild in bot.guilds:
+        for ch in guild.voice_channels:
+            if ch.name.startswith("👥 Mitglieder:"):
+                new_name = f"👥 Mitglieder: {guild.member_count}"
+                if ch.name != new_name:
+                    try:
+                        await ch.edit(name=new_name, reason="VOLT Statistik")
+                    except discord.HTTPException:
+                        pass
+
+
+@update_member_count.before_loop
+async def _before():
+    await bot.wait_until_ready()
+
+
+# ---------------------------------------------------------------
 # BOT
 # ---------------------------------------------------------------
 @bot.event
@@ -160,9 +189,10 @@ async def setup_hook():
     if GUILD_ID:
         guild = discord.Object(id=GUILD_ID)
         bot.tree.copy_global_to(guild=guild)
-        await bot.tree.sync(guild=guild)  # sofort verfuegbar
+        await bot.tree.sync(guild=guild)
     else:
         await bot.tree.sync()
+    update_member_count.start()
 
 
 @bot.event
@@ -174,49 +204,123 @@ def owner_only(interaction: discord.Interaction) -> bool:
     return interaction.user.id == OWNER_ID
 
 
-@bot.tree.command(name="setup", description="Baut Rollen, Kategorien, Channels und Rechte auf (nur Owner)")
+async def run_full_setup(interaction: discord.Interaction):
+    guild = interaction.guild
+    current_channel_id = interaction.channel_id
+    stats = {"del_ch": 0, "del_roles": 0, "skipped": [], "rollen": 0,
+             "kategorien": 0, "channels": 0}
+
+    # 1) ALLE Channels loeschen (der aktuelle Channel kommt ganz zum Schluss)
+    for ch in list(guild.channels):
+        if ch.id == current_channel_id:
+            continue
+        try:
+            await ch.delete(reason="VOLT Setup: Neuaufbau")
+            stats["del_ch"] += 1
+        except discord.HTTPException:
+            stats["skipped"].append(f"Channel {ch.name}")
+
+    # 2) ALLE Rollen loeschen (nicht @everyone, keine Bot-/Integrationsrollen,
+    #    keine Rollen ueber der Bot-Rolle)
+    for role in sorted(guild.roles, key=lambda r: r.position):
+        if role.is_default() or role.managed or role >= guild.me.top_role:
+            continue
+        try:
+            await role.delete(reason="VOLT Setup: Neuaufbau")
+            stats["del_roles"] += 1
+        except discord.HTTPException:
+            stats["skipped"].append(f"Rolle {role.name}")
+
+    # 3) Rollen neu erstellen
+    ROLE_CACHE[guild.id] = {}
+    for key, name, color, perms, hoist in ROLES:
+        role = await guild.create_role(
+            name=name, colour=discord.Colour(color),
+            permissions=perms, hoist=hoist, reason="VOLT Setup")
+        ROLE_CACHE[guild.id][key] = role
+        stats["rollen"] += 1
+
+    # 4) Dem Owner die Owner-Rolle geben
+    owner_member = guild.get_member(OWNER_ID)
+    if owner_member is None:
+        try:
+            owner_member = await guild.fetch_member(OWNER_ID)
+        except discord.HTTPException:
+            owner_member = None
+    if owner_member:
+        await owner_member.add_roles(ROLE_CACHE[guild.id]["owner"], reason="VOLT Setup")
+
+    # 5) Kategorien + Channels neu erstellen
+    for cat_name, mode, channels in STRUCTURE:
+        category = await guild.create_category(
+            cat_name, overwrites=build_overwrites(guild, mode), reason="VOLT Setup")
+        stats["kategorien"] += 1
+        for ch_name, kind in channels:
+            if kind == "voice":
+                name = ch_name
+                if ch_name.startswith("👥 Mitglieder:"):
+                    name = f"👥 Mitglieder: {guild.member_count}"
+                await guild.create_voice_channel(name, category=category)
+            else:
+                await guild.create_text_channel(ch_name, category=category)
+            stats["channels"] += 1
+
+    # 6) Den Channel, in dem /setup lief, zum Schluss loeschen
+    old = guild.get_channel(current_channel_id)
+    if old:
+        try:
+            await old.delete(reason="VOLT Setup: Neuaufbau")
+            stats["del_ch"] += 1
+        except discord.HTTPException:
+            stats["skipped"].append(f"Channel {old.name}")
+
+    msg = (
+        "✅ Neuaufbau fertig.\n"
+        f"Gelöscht: {stats['del_ch']} Channels, {stats['del_roles']} Rollen\n"
+        f"Erstellt: {stats['rollen']} Rollen, {stats['kategorien']} Kategorien, {stats['channels']} Channels\n\n"
+        "⚠️ Ziehe jetzt die Bot-Rolle in den Servereinstellungen ganz nach oben."
+    )
+    if stats["skipped"]:
+        msg += "\n\nNicht löschbar (z. B. Community-Pflichtchannels): " + ", ".join(stats["skipped"][:10])
+    return msg
+
+
+class ConfirmWipe(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=60)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != OWNER_ID:
+            await interaction.response.send_message("❌ Keine Berechtigung.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Ja, alles löschen & neu aufbauen", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(
+            content="⏳ Setup läuft, das kann einige Minuten dauern ...", view=None)
+        try:
+            msg = await run_full_setup(interaction)
+        except Exception as e:
+            msg = f"❌ Fehler beim Setup: {e}"
+        await interaction.followup.send(msg, ephemeral=True)
+        self.stop()
+
+    @discord.ui.button(label="Abbrechen", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="Abgebrochen.", view=None)
+        self.stop()
+
+
+@bot.tree.command(name="setup", description="LÖSCHT alle Channels & Rollen und baut den Server neu auf (nur Owner)")
 async def setup_cmd(interaction: discord.Interaction):
     if not owner_only(interaction):
         await interaction.response.send_message("❌ Keine Berechtigung.", ephemeral=True)
         return
-
-    await interaction.response.defer(ephemeral=True, thinking=True)
-    guild = interaction.guild
-    created = {"rollen": 0, "kategorien": 0, "channels": 0}
-
-    # 1) Rollen anlegen (nur fehlende)
-    for name, color, perms, hoist in ROLES:
-        if discord.utils.get(guild.roles, name=name):
-            continue
-        await guild.create_role(
-            name=name, colour=discord.Colour(color),
-            permissions=perms, hoist=hoist, reason="VOLT Setup")
-        created["rollen"] += 1
-
-    # 2) Kategorien + Channels (nur fehlende)
-    for cat_name, mode, channels in STRUCTURE:
-        overwrites = build_overwrites(guild, mode)
-        category = discord.utils.get(guild.categories, name=cat_name)
-        if category is None:
-            category = await guild.create_category(
-                cat_name, overwrites=overwrites, reason="VOLT Setup")
-            created["kategorien"] += 1
-
-        for ch_name, kind in channels:
-            if discord.utils.get(category.channels, name=ch_name):
-                continue
-            if kind == "voice":
-                await guild.create_voice_channel(ch_name, category=category)
-            else:
-                await guild.create_text_channel(ch_name, category=category)
-            created["channels"] += 1
-
-    await interaction.followup.send(
-        f"✅ Setup fertig.\n"
-        f"Rollen: {created['rollen']} · Kategorien: {created['kategorien']} · Channels: {created['channels']}\n\n"
-        f"⚠️ Ziehe jetzt die Bot-Rolle in den Servereinstellungen ganz nach oben "
-        f"(über Kunde/User), sonst kann der Bot keine Rollen vergeben.",
-        ephemeral=True)
+    await interaction.response.send_message(
+        "⚠️ **Achtung:** Das löscht **alle** Channels und **alle** Rollen auf diesem Server "
+        "und baut alles neu auf. Das kann nicht rückgängig gemacht werden.\n\nFortfahren?",
+        view=ConfirmWipe(), ephemeral=True)
 
 
 bot.run(TOKEN)
