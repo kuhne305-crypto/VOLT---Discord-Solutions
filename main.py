@@ -112,6 +112,9 @@ def build_overwrites(guild: discord.Guild, mode: str):
 
     if mode == "info":
         ow[everyone] = discord.PermissionOverwrite(view_channel=True, connect=False)
+    elif mode == "honeypot":  # jeder sieht UND darf schreiben (Falle fuer gehackte Accounts)
+        ow[everyone] = discord.PermissionOverwrite(
+            view_channel=True, read_message_history=True, send_messages=True)
     elif mode == "public":
         ow[everyone] = discord.PermissionOverwrite(
             view_channel=True, read_message_history=True, send_messages=False)
@@ -163,7 +166,7 @@ STRUCTURE = [
         ("📜│regeln", "text"),
         ("👋│willkommen", "text"),
         ("✅│verify", "text"),
-        ("🚫│nicht-schreiben", "text"),
+        ("🚫│nicht-schreiben", "text", "honeypot"),
     ]),
     ("━━━━━ 📌 INFOS ━━━━━", "verified", [
         ("📢│ankündigungen", "text"),
@@ -249,6 +252,8 @@ CREATE TABLE IF NOT EXISTS warns (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS blacklist (
   user_id INTEGER PRIMARY KEY, reason TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS stats (
+  key TEXT PRIMARY KEY, value INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS reviews (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER UNIQUE, user_id INTEGER, stars INTEGER,
   comment TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
@@ -842,6 +847,33 @@ PRICE_TEXT = (
 )
 
 
+async def honeypot_embed() -> discord.Embed:
+    n = await pool.fetchval("SELECT value FROM stats WHERE key='honeypot_bans'") or 0
+    e = discord.Embed(
+        title="🚨⚠️ WICHTIGER HINWEIS ⚠️🚨",
+        description=(
+            "**Dieser Kanal dient lediglich dazu, gehackte Spam-Accounts automatisch zu bannen!**\n\n"
+            "Das bedeutet:\n"
+            "**Wer hier reinschreibt, wird ohne Möglichkeit auf Entbannung permanent von diesem Discord gebannt!**\n\n"
+            "🚫 **ALSO NICHT HIER REINSCHREIBEN!!!** 🚫\n\n"
+            "Wer hier dennoch reinschreibt, ist selbst schuld."),
+        color=0xE74C3C)
+    e.add_field(name="📊 Statistik",
+                value=f"Bereits **{n}** gehackte Discord-Nutzer wurden durch dieses System gebannt.",
+                inline=False)
+    return e
+
+
+async def refresh_honeypot_panel(guild: discord.Guild):
+    ch = find_channel(guild, "nicht-schreiben")
+    if not ch:
+        return
+    async for m in ch.history(limit=20):
+        if m.author.id == guild.me.id and m.embeds:
+            await m.edit(embed=await honeypot_embed())
+            return
+
+
 async def send_panel(guild: discord.Guild, key: str, embed: discord.Embed, view=None):
     ch = find_channel(guild, key)
     if not ch:
@@ -862,9 +894,13 @@ async def post_panels(guild: discord.Guild):
         "👋 Willkommen bei VOLT – Discord Solutions",
         "Wir bauen **Discord-Bots und Discord-Server** für kleine und große Streamer, Communities und Projekte.\n\n"
         "1️⃣ Regeln akzeptieren\n2️⃣ Preisliste ansehen\n3️⃣ In #bestellen ein Ticket öffnen"))
-    await send_panel(guild, "nicht-schreiben", emb(
-        "🚫 Nicht schreiben",
-        "Bitte schreibe hier nicht. Anfragen gehen über ein Ticket in #bestellen."))
+    hp = find_channel(guild, "nicht-schreiben")
+    if hp:
+        try:  # Schreibrecht fuer alle setzen, damit die Falle funktioniert
+            await hp.edit(overwrites=build_overwrites(guild, "honeypot"))
+        except discord.HTTPException:
+            pass
+    await send_panel(guild, "nicht-schreiben", await honeypot_embed())
     await send_panel(guild, "server-status", emb("🟢 Status: Online", "Alle Systeme laufen."))
     await send_panel(guild, "preisliste", emb("💰 Preisliste & Leistungen", PRICE_TEXT))
     await send_panel(guild, "kosten", emb(
@@ -1129,10 +1165,15 @@ async def run_full_setup(interaction: discord.Interaction) -> str:
         category = await guild.create_category(cat_name, overwrites=build_overwrites(guild, mode),
                                                reason="VOLT Setup")
         st["kat"] += 1
-        for ch_name, kind in channels:
+        for entry in channels:
+            ch_name, kind = entry[0], entry[1]
+            ch_mode = entry[2] if len(entry) > 2 else None
             if kind == "voice":
                 name = f"👥 Mitglieder: {guild.member_count}" if ch_name.startswith("👥") else ch_name
                 await guild.create_voice_channel(name, category=category)
+            elif ch_mode:
+                await guild.create_text_channel(
+                    ch_name, category=category, overwrites=build_overwrites(guild, ch_mode))
             else:
                 await guild.create_text_channel(ch_name, category=category)
             st["ch"] += 1
@@ -1263,6 +1304,30 @@ async def on_message(message: discord.Message):
         return
     member = message.author
     if has_team_role(member):
+        return
+
+    # Honeypot: wer hier schreibt, wird sofort gebannt
+    hp = find_channel(message.guild, "nicht-schreiben")
+    if hp and message.channel.id == hp.id:
+        try:
+            await message.guild.ban(member, reason="Honeypot: hat in #nicht-schreiben geschrieben",
+                                    delete_message_seconds=3600)
+            await pool.execute(
+                "INSERT INTO stats (key,value) VALUES ('honeypot_bans',1) "
+                "ON CONFLICT (key) DO UPDATE SET value=value+1")
+            await log(message.guild, "mod-logs", emb(
+                "🍯 Honeypot-Bann",
+                f"{member} (ID {member.id}) hat in {hp.mention} geschrieben.\n"
+                f"Inhalt: {message.content[:300] or '–'}", 0xE74C3C))
+            await refresh_honeypot_panel(message.guild)
+        except discord.HTTPException:
+            try:
+                await message.delete()
+            except discord.HTTPException:
+                pass
+            await log(message.guild, "admin-logs", emb(
+                "⚠️ Honeypot-Bann fehlgeschlagen",
+                f"{member} konnte nicht gebannt werden (Rollen-Hierarchie?).", 0xE67E22))
         return
 
     # Invites: immer verboten
