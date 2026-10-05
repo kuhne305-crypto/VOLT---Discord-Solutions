@@ -22,7 +22,17 @@ from discord.ext import commands, tasks
 TOKEN = os.environ["DISCORD_TOKEN"]
 OWNER_ID = int(os.environ["OWNER_ID"])
 GUILD_ID = int(os.environ["GUILD_ID"]) if os.environ.get("GUILD_ID") else None
-DATABASE_URL = os.environ["DATABASE_URL"]
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip().strip("\"'").strip()
+if not DATABASE_URL.startswith(("postgres://", "postgresql://")):
+    # Fallback: aus den einzelnen PG-Variablen zusammenbauen, falls vorhanden
+    _h, _p = os.environ.get("PGHOST"), os.environ.get("PGPORT", "5432")
+    _u, _pw, _db = os.environ.get("PGUSER"), os.environ.get("PGPASSWORD"), os.environ.get("PGDATABASE")
+    if _h and _u and _pw and _db:
+        DATABASE_URL = f"postgresql://{_u}:{_pw}@{_h}:{_p}/{_db}"
+    else:
+        raise SystemExit(
+            "FEHLER: DATABASE_URL ist leer oder ungueltig. Sie muss mit postgresql:// beginnen. "
+            f"Aktueller Anfang: {DATABASE_URL[:15]!r} (Laenge {len(DATABASE_URL)})")
 DONATION_URL = os.environ.get("DONATION_URL", "")  # z.B. PayPal.me / Ko-fi Link
 
 MIN_ACCOUNT_AGE_DAYS = int(os.environ.get("MIN_ACCOUNT_AGE_DAYS", "3"))  # 0 = aus
