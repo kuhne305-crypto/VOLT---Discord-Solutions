@@ -52,14 +52,33 @@
   };
   function setAll(key, text) { $$('[data-s="' + key + '"]').forEach(function (el) { el.textContent = text; }); }
   function plural(n, one, many) { return n === 1 ? one : many; }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function dur(sec) {
+    sec = Math.max(0, Math.round(sec || 0));
+    var h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60);
+    return h ? h + " Std " + pad(m) + " Min" : (m ? m + " Min" : "unter 1 Min");
+  }
+  function clock(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    return Math.floor(sec / 3600) + ":" + pad(Math.floor(sec % 3600 / 60)) + ":" + pad(sec % 60);
+  }
+  var timers = [];
+  function tick() {
+    timers.forEach(function (t) {
+      var sec = t.base + (t.running ? (Date.now() - t.t0) / 1000 : 0);
+      t.el.textContent = (t.running ? "⏱ " : "⏸ ") + clock(sec) + (t.running ? " · Uhr läuft" : " · pausiert");
+    });
+  }
+  setInterval(tick, 1000);
 
   var BOLT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.6 1.8 3.9 13.6h6.6l-1.3 8.6 10-12.4h-6.8z"/></svg>';
   var DEMO = {
     ok: true, demo: true, updated: null, invite: null,
     discord: { members: 12, online: 4 },
     projects: { running: 3, active: 1, paused: 0, requests: 1, done: 7 },
-    workload: { active: 1, capacity: 2, percent: 50, label: "Gut ausgelastet", queue: 1, wait_days: 2, per_day: 1 },
-    build: { avg_days: null, samples: 0 },
+    workload: { active: 1, capacity: 2, percent: 50, label: "Gut ausgelastet", queue: 1, wait_days: 2, per_day: 1,
+      slots: [{ n: 1, busy: true, type: "📺 Streamer-Bot", running: true, seconds: 5040 }, { n: 2, busy: false }] },
+    build: { avg_days: null, samples: 0, avg_work_seconds: 11520, work_samples: 4 },
     team: { people: 1 },
     reviews: {
       count: 5, avg: 4.8, label: "Sehr zufrieden", dist: { "5": 4, "4": 1, "3": 0, "2": 0, "1": 0 },
@@ -95,7 +114,10 @@
     var w = wl.wait_days;
     setAll("wait", w === 0 ? "Sofort" : w ? "~" + nf(w) + " " + plural(w, "Tag", "Tage") : "–");
     setAll("wait-sub", w === 0 ? "Die Werkbank ist frei" : "Start für neue Anfragen");
-    if (b.avg_days) {
+    if (b.avg_work_seconds) {
+      setAll("build", "Ø " + (b.avg_work_seconds >= 3600 ? nf(b.avg_work_seconds / 3600, 1).replace(/,0$/, "") + " Std" : dur(b.avg_work_seconds)));
+      setAll("build-sub", "gestoppte Arbeitszeit aus " + nf(b.work_samples) + " " + plural(b.work_samples, "Projekt", "Projekten"));
+    } else if (b.avg_days) {
       setAll("build", "Ø " + nf(b.avg_days, 1).replace(/,0$/, "") + " " + plural(b.avg_days, "Tag", "Tage"));
       setAll("build-sub", "aus " + nf(b.samples) + " Projekten");
     } else {
@@ -109,16 +131,26 @@
     var slots = $("#slots");
     if (slots && wl.capacity) {
       slots.textContent = "";
+      timers = [];
+      var list = wl.slots || [];
       for (var i = 0; i < wl.capacity; i++) {
-        var busy = i < (wl.active || 0);
+        var sl = list[i] || { n: i + 1, busy: i < (wl.active || 0) };
         var s = document.createElement("div");
-        s.className = "slot" + (busy ? " busy" : "");
+        s.className = "slot" + (sl.busy ? " busy" : "") + (sl.busy && sl.running === false ? " paused" : "");
         s.innerHTML = BOLT;
-        var t = document.createElement("span");
-        t.textContent = "Platz " + (i + 1) + ": " + (busy ? "Projekt in Arbeit" : "frei");
-        s.appendChild(t);
+        var box = document.createElement("span"); box.className = "slot-txt";
+        var t = document.createElement("b");
+        t.textContent = "Platz " + sl.n + (sl.busy ? " · " + (sl.type || "Projekt in Arbeit") : ": frei");
+        box.appendChild(t);
+        if (sl.busy && typeof sl.seconds === "number") {
+          var c = document.createElement("small");
+          box.appendChild(c);
+          timers.push({ el: c, base: sl.seconds, running: !!sl.running, t0: Date.now() });
+        }
+        s.appendChild(box);
         slots.appendChild(s);
       }
+      tick();
     }
     var q = $("#queue");
     if (q) {
