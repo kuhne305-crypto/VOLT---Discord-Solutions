@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fraktions-Dashboard · VOLT</title>
+<meta name="description" content="Familien-Dashboard mit eigenem Discord-Bot für FiveM-Familien und Fraktionen: Mitglieder, Termine, Kasse, Lager und Sanktionen. Mit klickbarer Demo. Kostenlos von VOLT.">
+<meta name="theme-color" content="#050303">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="de_DE">
+<meta property="og:site_name" content="VOLT – Discord Solutions">
+<meta property="og:title" content="Fraktions-Dashboard · VOLT">
+<meta property="og:description" content="Familien-Dashboard mit eigenem Discord-Bot für FiveM-Familien und Fraktionen: Mitglieder, Termine, Kasse, Lager und Sanktionen. Mit klickbarer Demo. Kostenlos von VOLT.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="assets/fonts/saira-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/demo.css">
+<script src="assets/demo.js" defer></script>
+<script src="assets/site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="logo" href="index.html" aria-label="VOLT Discord Solutions, Startseite">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17.5" fill="#050303" stroke="#ff1f2a" stroke-width="2.4"/><polygon fill="#fff" points="23.6,7.4 16.8,20.7 19.6,20.7 13.9,33.3 24.3,20.7 21.1,20.7"/></svg>
+      <span class="logo-word"><b>VOLT</b><span>DISCORD SOLUTIONS</span></span>
+    </a>
+    <nav class="nav" id="nav" aria-label="Hauptnavigation">
+      <a href="index.html">Start</a>
+      <div class="nav-drop is-current">
+        <button type="button" aria-expanded="false" aria-controls="dashMenu">Leistungen <svg class="chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg></button>
+        <div class="drop" id="dashMenu">
+          <a href="streamer.html"><svg viewBox="0 0 34 34" aria-hidden="true"><rect x=".5" y=".5" width="33" height="33" rx="8" fill="#1a0a0b" stroke="#3e1c1f"/><path d="M13 10.5v13l10.5-6.5z" fill="#ff1f2a"/></svg><b>Streamer-Bot</b><small>Live-Alerts, OBS-Hilfe, bald Twitch-Bots</small></a>
+          <a href="fraktion.html" aria-current="page"><svg viewBox="0 0 34 34" aria-hidden="true"><rect x=".5" y=".5" width="33" height="33" rx="8" fill="#1a0a0b" stroke="#3e1c1f"/><path d="M17 8.5 24.5 11v6c0 4.4-3.2 7.6-7.5 8.8-4.3-1.2-7.5-4.4-7.5-8.8v-6z" fill="none" stroke="#ff1f2a" stroke-width="2"/><path d="m17.6 12.5-3.4 5.3h2.4l-.8 3.9 3.6-5.4h-2.4z" fill="#fff"/></svg><b>Fraktions-Dashboard</b><small>Dashboard + Discord-Bot, mit Demo</small></a>
+        </div>
+      </div>
+      <a href="index.html#status">Live-Status</a>
+      <a href="index.html#bewertungen">Bewertungen</a>
+      <a href="index.html#faq">FAQ</a>
+      <a class="btn btn-red btn-mobile" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/></svg>Discord beitreten</a>
+    </nav>
+    <a class="btn btn-red btn-sm" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite>Discord beitreten</a>
+    <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="nav">Menü</button>
+  </div>
+</header>
+<main>
+  <section class="hero page-hero">
+    <canvas class="storm" aria-hidden="true"></canvas>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="crumbs"><a href="index.html">Start</a><span aria-hidden="true">/</span><span>Leistungen</span><span aria-hidden="true">/</span><span style="color:#fff">Fraktions-Dashboard</span></p>
+        <p class="eyebrow">Familien-Dashboard + Discord-Bot</p>
+        <h1>Deine Familie. <span class="hot">Alles im Griff.</span></h1>
+        <p class="lede">Mitglieder, Termine, Kasse, Lager und Sanktionen in einem Dashboard. Alles live verbunden, vom Discord ins Dashboard und zurück.</p>
+        <div class="cta-row">
+          <a class="btn btn-red" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/></svg>Per Ticket anfragen</a>
+          <a class="btn btn-line" href="#demo-bereich">Demo öffnen<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h13M13 6l6 6-6 6"/></svg></a>
+        </div>
+      </div>
+      <div class="spec"><div><b>14 Systeme</b><span>in einem Dashboard</span></div><div><b>61 Befehle</b><span>im Discord-Bot</span></div><div><b>1 Link</b><span>für alles, auch am Handy</span></div><div><b>Deine Farbe</b><span>hell, dunkel, eigener Akzent</span></div></div>
+    </div>
+  </section>
+
+  <section class="band" id="peek">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="eyebrow">Sneak Peek</p>
+        <h2>Das echte Dashboard</h2>
+        <p>Echte Dashboard-Ansichten mit Beispieldaten. Blättere mit den Pfeilen oder wische zur Seite.</p>
+      </header>
+      <div class="peek">
+        <div class="peek-track" id="peekTrack" tabindex="0" aria-label="Sneak Peek Familien-Dashboard, 8 Bilder, mit Pfeiltasten blättern"><figure class="peek-slide"><div class="peek-img"><img src="assets/img/peek/slide-01-1600.webp" srcset="assets/img/peek/slide-01-900.webp 900w, assets/img/peek/slide-01-1600.webp 1600w" sizes="(max-width: 1240px) 100vw, 1120px" width="1600" height="900" alt="Übersicht aller Systeme des Familien-Dashboards (Sneak Peek mit Beispieldaten)" draggable="false"></div><figcaption><b>01 / 08</b>14 Systeme. Ein Dashboard. Ein Bot.</figcaption></figure><figure class="peek-slide"><div class="peek-img"><img src="assets/img/peek/slide-02-1600.webp" srcset="assets/img/peek/slide-02-900.webp 900w, assets/img/peek/slide-02-1600.webp 1600w" sizes="(max-width: 1240px) 100vw, 1120px" width="1600" height="900" alt="Übersichtsseite mit Mitgliedern, Kasse, Route und nächsten Terminen (Sneak Peek mit Beispieldaten)" loading="lazy" draggable="false"></div><figcaption><b>02 / 08</b>Übersicht – alles im Griff, auch am Handy</figcaption></figure><figure class="peek-slide"><div class="peek-img"><img src="assets/img/peek/slide-03-1600.webp" srcset="assets/img/peek/slide-03-900.webp 900w, assets/img/peek/slide-03-1600.webp 1600w" sizes="(max-width: 1240px) 100vw, 1120px" width="1600" height="900" alt="Mitgliederliste mit Rängen und Blood-In-Nachricht im Discord (Sneak Peek mit Beispieldaten)" loading="lazy" draggable="false"></div><figcaption><b>03 / 08</b>Mitglieder, Ränge und Blood-In</figcaption></figure><figure class="peek-slide"><div class="peek-img"><img src="assets/img/peek/slide-04-1600.webp" srcset="assets/img/peek/slide-04-900.webp 900w, assets/img/peek/slide-04-1600.webp 1600w" sizes="(max-width: 1240px) 100vw, 1120px" width="1600" height="900" alt="Kalender mit Meet-Up-Nachricht und Zusagen im Discord (Sneak Peek mit Beispieldaten)" loading="lazy" draggable="false"></div><figcaption><b>04 / 08</b>Aufstellung und Termine</figcaption></figure><figure class="peek-slide"><div class="peek-img"><img src="assets/img/peek/slide-05-1600.webp" srcset="assets/img/peek/slide-05-900.webp 900w, assets/img/peek/slide-05-1600.webp 1600w" sizes="(max-width: 1240px) 100vw, 1120px" width="1600" height="900" alt="Grün- und Schwarzgeldkasse und Wochenabgaben (Sneak Peek mit Beispieldaten)" loading="lazy" draggable="false"></div><figcaption><b>05 / 08</b>Kasse und Wochenabgaben</figcaption></figure><figure class="peek-slide"><div class="peek-img"><img src="assets/img/peek/slide-06-1600.webp" srcset="assets/img/peek/slide-06-900.webp 900w, assets/img/peek/slide-06-1600.webp 1600w" sizes="(max-width: 1240px) 100vw, 1120px" width="1600" height="900" alt="Leihgaben-Übersicht und Leihgabe-Nachricht im Discord (Sneak Peek mit Beispieldaten)" loading="lazy" draggable="false"></div><figcaption><b>06 / 08</b>Lagerverwaltung mit Leihgabe</figcaption></figure><figure class="peek-slide"><div class="peek-img"><img src="assets/img/peek/slide-07-1600.webp" srcset="assets/img/peek/slide-07-900.webp 900w, assets/img/peek/slide-07-1600.webp 1600w" sizes="(max-width: 1240px) 100vw, 1120px" width="1600" height="900" alt="Sanktion im Discord und Erinnerung per DM (Sneak Peek mit Beispieldaten)" loading="lazy" draggable="false"></div><figcaption><b>07 / 08</b>Der Discord-Bot mit eigenen Log-Channels</figcaption></figure><figure class="peek-slide"><div class="peek-img"><img src="assets/img/peek/slide-08-1600.webp" srcset="assets/img/peek/slide-08-900.webp 900w, assets/img/peek/slide-08-1600.webp 1600w" sizes="(max-width: 1240px) 100vw, 1120px" width="1600" height="900" alt="Einstellungen für Erscheinungsbild und Akzentfarbe (Sneak Peek mit Beispieldaten)" loading="lazy" draggable="false"></div><figcaption><b>08 / 08</b>Hell oder dunkel. Deine Farbe.</figcaption></figure></div>
+        <div class="peek-bar">
+          <div class="peek-dots" id="peekDots"></div>
+          <div class="peek-nav"><button type="button" id="peekPrev" aria-label="Vorheriges Bild"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M19 12H6M11 6l-6 6 6 6"/></svg></button><span class="peek-count" id="peekCount">01 / 08</span><button type="button" id="peekNext" aria-label="Nächstes Bild"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h13M13 6l6 6-6 6"/></svg></button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band band-alt" id="demo-bereich">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="eyebrow">Klickbare Demo</p>
+        <h2>Probier es selbst aus</h2>
+        <p>Klick dich durch Mitglieder, Termine, Abmeldungen, Kasse, Lager und mehr. Alle Mitglieder und Zahlen sind erfunden. Was du hier machst, bleibt in deinem Browser und wird nirgends gespeichert.</p>
+      </header>
+      <div class="demo-wrap">
+        <div class="demo" id="demo" data-mode="dark">
+          <div class="demo-chrome"><span class="demo-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="demo-path" id="demoPath">Deine Familie / Übersicht</span><span class="demo-chip"><span class="demo-badge">Demo</span><span class="demo-live">Live</span></span></div>
+          <div class="demo-body">
+            <aside class="demo-side">
+              <div class="demo-fam"><span class="df">DF</span><div><b>Deine Familie</b><small>FAMILIEN-DASHBOARD</small></div></div>
+              <div class="demo-conn"><i></i><div><b>Discord verbunden</b><small>Bot online · Demo</small></div></div>
+              <nav class="demo-nav" aria-label="Bereiche der Demo"><h5>Zentrale</h5><button type="button" data-view="uebersicht"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>Übersicht</button><button type="button" data-view="mitglieder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 19v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 17.5V19M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM20 19v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.15a3.5 3.5 0 0 1 0 6.7"/></svg>Mitglieder</button><h5>Familie</h5><button type="button" data-view="blood"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3s6 6.4 6 11a6 6 0 0 1-12 0c0-4.6 6-11 6-11z"/></svg>Blood-In &amp; Out</button><button type="button" data-view="termine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 6h14v14H5zM5 10h14M9 3v4M15 3v4"/></svg>Termine &amp; Aufstellung</button><button type="button" data-view="abmeldungen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h9M10 7l5 5-5 5M19 4v16"/></svg>Abmeldungen</button><h5>Finanzen</h5><button type="button" data-view="kasse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h14a2 2 0 0 1 2 2v9H4zM4 7l11-3v3M16 13h1"/></svg>Kasse</button><button type="button" data-view="wochen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7M17 15l2 2 3-4"/></svg>Wochenabgaben</button><h5>Lager</h5><button type="button" data-view="lager"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8l8-4 8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8"/></svg>Lagerverwaltung</button><h5>Ordnung</h5><button type="button" data-view="sanktionen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6z"/><path d="M12 8v4M12 15.5v.5"/></svg>Sanktionen</button><h5>Persönlich</h5><button type="button" data-view="design"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.8 1.6-1.6 0-1-.9-1.4-.9-2.3 0-.9.7-1.6 1.6-1.6H17a4 4 0 0 0 4-4c0-4.7-4-8.5-9-8.5z"/></svg>Erscheinungsbild</button></nav>
+            </aside>
+            <div class="demo-main" id="demoMain" aria-live="polite"><p style="color:var(--d-muted)">Die Demo lädt …</p></div>
+          </div>
+          <div class="drawer" id="demoDrawer" hidden><div class="drawer-panel" id="demoDrawerBody" role="dialog" aria-label="Details zum Demo-Mitglied"></div></div>
+          <div class="demo-toast" id="demoToast" role="status" hidden></div>
+        </div>
+        <div class="wm" aria-hidden="true"></div>
+      </div>
+      <p class="demo-hint"><span>Tipp: Stimm beim Meet Up unter „Termine“ ab</span><span>Gib Leihgaben im Lager zurück</span><span>Stell unter „Erscheinungsbild“ deine Farbe ein</span></p>
+    </div>
+  </section>
+
+  <section class="band" id="systeme">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="eyebrow">Was drin ist</p>
+        <h2>14 Systeme. Ein Bot.</h2>
+        <p>Alles live verbunden, vom Discord ins Dashboard und zurück.</p>
+      </header>
+      <div class="spec sys"><div><b>Mitglieder &amp; Ränge</b><span>Rang ändern tauscht automatisch die Discord-Rolle.</span></div><div><b>Verify &amp; Probezeit</b><span>Neue Leute starten als Prospect, mit eigener Übersicht.</span></div><div><b>Blood-In &amp; Blood-Out</b><span>Aufnahme und Ausstieg bekommen ihre eigene Nachricht.</span></div><div><b>Termine &amp; Aufstellung</b><span>Komme · Später · Komme nicht, gepostet um 23:59 am Vortag.</span></div><div><b>Abmeldungen</b><span>Kurz- und Langzeit mit eigener Übersicht.</span></div><div><b>Kasse</b><span>Grün- und Schwarzgeld getrennt, auch per /kasse in Discord.</span></div><div><b>Wochenabgaben</b><span>Woche schließt sich Sonntag um 23:59 selbst ab.</span></div><div><b>Lagerverwaltung</b><span>OUT, Leihgabe und IN mit Buttons im Discord.</span></div><div><b>Sanktionen</b><span>Mit Frist und Erinnerung per DM 24 Stunden vorher.</span></div><div><b>Aufgaben &amp; Rollen</b><span>Wer macht was, sauber verteilt.</span></div><div><b>Eigene Log-Channels</b><span>Geld, Lager, Blood und Abmeldungen getrennt.</span></div><div><b>Hell, dunkel, deine Farbe</b><span>Jedes Mitglied stellt sich sein Dashboard selbst ein. Auch am Handy.</span></div></div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap"><div class="final-in">
+      <h2>Mehr Überblick <span>für eure Leitung.</span></h2>
+      <p>Öffne ein Ticket auf dem VOLT-Discord und wähle Fraktions-Dashboard. Kostenlos, Spenden freiwillig.</p>
+      <div class="cta-row">
+        <a class="btn btn-red" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/></svg>Discord beitreten</a>
+        <a class="btn btn-line" href="#" data-donate hidden target="_blank" rel="noopener">💛 Freiwillig spenden</a>
+      </div>
+    </div></div>
+  </section>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <img class="foot-banner" src="assets/img/volt-banner.webp" width="1642" height="377" alt="VOLT – Discord Solutions" loading="lazy">
+        <p>Discord-Bots, Server-Setups und Dashboards. Gebaut und betreut von einer Person. Alles kostenlos, Spenden freiwillig.</p>
+      </div>
+      <div>
+        <h4>Seiten</h4>
+        <ul>
+          <li><a href="index.html">Start</a></li>
+          <li><a href="streamer.html">Streamer-Bot</a></li>
+          <li><a href="fraktion.html">Fraktions-Dashboard</a></li>
+          <li><a href="index.html#status">Live-Status</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Loslegen</h4>
+        <ul>
+          <li><a href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite>Discord beitreten</a></li>
+          <li><a href="index.html#bewertungen">Bewertungen</a></li>
+          <li><a href="index.html#faq">FAQ</a></li>
+          <li><a href="#" data-donate hidden target="_blank" rel="noopener">Spenden</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <span>© <span data-year>2026</span> VOLT – Discord Solutions · Alle Vorschauen mit Beispieldaten</span>
+      <nav aria-label="Rechtliches"><a href="impressum.html">Impressum</a><a href="datenschutz.html">Datenschutz</a></nav>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

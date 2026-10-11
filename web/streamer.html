@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Streamer-Bot · VOLT</title>
+<meta name="description" content="Streamer-Bot mit Live-Alerts, Self-Roles und Stream-Zeitplan, Hilfe beim Einrichten von OBS und bald eigene Twitch-Bots. Kostenlos von VOLT.">
+<meta name="theme-color" content="#050303">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="de_DE">
+<meta property="og:site_name" content="VOLT – Discord Solutions">
+<meta property="og:title" content="Streamer-Bot · VOLT">
+<meta property="og:description" content="Streamer-Bot mit Live-Alerts, Self-Roles und Stream-Zeitplan, Hilfe beim Einrichten von OBS und bald eigene Twitch-Bots. Kostenlos von VOLT.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="assets/fonts/saira-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="logo" href="index.html" aria-label="VOLT Discord Solutions, Startseite">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17.5" fill="#050303" stroke="#ff1f2a" stroke-width="2.4"/><polygon fill="#fff" points="23.6,7.4 16.8,20.7 19.6,20.7 13.9,33.3 24.3,20.7 21.1,20.7"/></svg>
+      <span class="logo-word"><b>VOLT</b><span>DISCORD SOLUTIONS</span></span>
+    </a>
+    <nav class="nav" id="nav" aria-label="Hauptnavigation">
+      <a href="index.html">Start</a>
+      <div class="nav-drop is-current">
+        <button type="button" aria-expanded="false" aria-controls="dashMenu">Leistungen <svg class="chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg></button>
+        <div class="drop" id="dashMenu">
+          <a href="streamer.html" aria-current="page"><svg viewBox="0 0 34 34" aria-hidden="true"><rect x=".5" y=".5" width="33" height="33" rx="8" fill="#1a0a0b" stroke="#3e1c1f"/><path d="M13 10.5v13l10.5-6.5z" fill="#ff1f2a"/></svg><b>Streamer-Bot</b><small>Live-Alerts, OBS-Hilfe, bald Twitch-Bots</small></a>
+          <a href="fraktion.html"><svg viewBox="0 0 34 34" aria-hidden="true"><rect x=".5" y=".5" width="33" height="33" rx="8" fill="#1a0a0b" stroke="#3e1c1f"/><path d="M17 8.5 24.5 11v6c0 4.4-3.2 7.6-7.5 8.8-4.3-1.2-7.5-4.4-7.5-8.8v-6z" fill="none" stroke="#ff1f2a" stroke-width="2"/><path d="m17.6 12.5-3.4 5.3h2.4l-.8 3.9 3.6-5.4h-2.4z" fill="#fff"/></svg><b>Fraktions-Dashboard</b><small>Dashboard + Discord-Bot, mit Demo</small></a>
+        </div>
+      </div>
+      <a href="index.html#status">Live-Status</a>
+      <a href="index.html#bewertungen">Bewertungen</a>
+      <a href="index.html#faq">FAQ</a>
+      <a class="btn btn-red btn-mobile" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/></svg>Discord beitreten</a>
+    </nav>
+    <a class="btn btn-red btn-sm" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite>Discord beitreten</a>
+    <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="nav">Menü</button>
+  </div>
+</header>
+<main>
+  <section class="hero page-hero">
+    <canvas class="storm" aria-hidden="true"></canvas>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="crumbs"><a href="index.html">Start</a><span aria-hidden="true">/</span><span>Leistungen</span><span aria-hidden="true">/</span><span style="color:#fff">Streamer-Bot</span></p>
+        <p class="eyebrow">Für Streamer</p>
+        <h1>Dein Stream. <span class="hot">Sofort im Discord.</span></h1>
+        <p class="lede">Der VOLT Streamer-Bot meldet deinen Stream, verteilt Rollen und zeigt deinen Zeitplan. Bei Bedarf helfe ich dir beim Einrichten von OBS. Bald gibt es außerdem eigene Twitch-Bots für deinen Kanal.</p>
+        <div class="cta-row">
+          <a class="btn btn-red" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/></svg>Per Ticket anfragen</a>
+          <a class="btn btn-line" href="#bot">Bot ansehen<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h13M13 6l6 6-6 6"/></svg></a>
+        </div>
+      </div>
+      <div class="spec"><div><b>Live-Alerts</b><span>Automatisch bei Stream-Start</span></div><div><b>Self-Roles</b><span>Rollen per Button</span></div><div><b>Zeitplan</b><span>Wochenplan im Discord</span></div><div><b>OBS-Hilfe</b><span>Einrichtung auf Wunsch</span></div></div>
+    </div>
+  </section>
+
+  <section class="band" id="bot">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="eyebrow">Der Streamer-Bot</p>
+        <h2>So sieht es in deinem Discord aus</h2>
+        <p>Kein Dashboard, kein Einarbeiten: Ich richte den Bot auf deinem Server ein und passe ihn an deine Kanäle und Rollen an.</p>
+      </header>
+      <div class="feature"><div class="feature-copy"><h3>Live-Alerts</h3><p>Sobald du live gehst, postet der Bot automatisch eine Meldung mit Titel, Kategorie, Vorschaubild und Link zum Stream.</p><ul class="ticks"><li>Ping nur an Leute mit der Live-Ping-Rolle</li><li>Eigener Text, wie du ihn willst</li><li>Eigener Kanal für Live-Meldungen</li></ul></div><div class="preview" role="img" aria-label="Vorschau Live-Alert im Discord mit Beispieldaten"><div inert><div class="dc"><div class="dc-top"><span class="h">#</span><b>🔴│live</b></div><div class="dc-feed"><div class="dc-msg"><div class="dc-ava"><svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" fill="#0b0404"/><circle cx="20" cy="20" r="15" fill="none" stroke="#ff1f2a" stroke-width="2"/><polygon fill="#fff" points="22.8,9 16.9,20.6 19.4,20.6 14.4,31.6 23.4,20.6 20.6,20.6"/></svg></div><div><div class="dc-meta"><span class="dc-name red">Stream-Bot</span><span class="dc-app">APP</span><time>Heute um 20:02</time></div><div class="dc-text"><span class="dc-role">@Live-Ping</span> DeinKanal ist jetzt live! 🔴</div><div class="dc-embed"><div class="dc-author"><i></i>DeinKanal · Twitch</div><div class="dc-e-title">Ranked bis Diamant – heute knacken wir es!</div><div class="dc-fields"><div class="dc-field"><b>Kategorie</b><span>VALORANT</span></div><div class="dc-field"><b>Gestartet</b><span>20:02 Uhr</span></div><div class="dc-field"><b>Plattform</b><span>Twitch</span></div></div><div class="dc-thumb"><span class="live-pill"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M13.6 1.8 3.9 13.6h6.6l-1.3 8.6 10-12.4h-6.8z"/></svg>Live</span><span>STREAM-VORSCHAU</span></div><div class="dc-e-foot">Stream-Bot • Live-Alert</div></div><div class="dc-btns"><span class="dc-btn">Zum Stream ↗</span></div></div></div></div></div></div><div class="wm" aria-hidden="true"></div></div></div>
+      <div class="feature"><div class="feature-copy"><h3>Self-Roles</h3><p>Deine Community holt sich ihre Rollen selbst per Button. Niemand muss Rollen von Hand verteilen.</p><ul class="ticks"><li>Rollen per Button an- und abwählen</li><li>Bestätigung, die nur der User sieht</li><li>Rollen frei wählbar</li></ul></div><div class="preview" role="img" aria-label="Vorschau Self-Roles im Discord mit Beispieldaten"><div inert><div class="dc"><div class="dc-top"><span class="h">#</span><b>🎭│rollen</b></div><div class="dc-feed"><div class="dc-msg"><div class="dc-ava"><svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" fill="#0b0404"/><circle cx="20" cy="20" r="15" fill="none" stroke="#ff1f2a" stroke-width="2"/><polygon fill="#fff" points="22.8,9 16.9,20.6 19.4,20.6 14.4,31.6 23.4,20.6 20.6,20.6"/></svg></div><div><div class="dc-meta"><span class="dc-name red">Stream-Bot</span><span class="dc-app">APP</span><time>Gestern um 18:30</time></div><div class="dc-embed"><div class="dc-e-title plain">🎭 Hol dir deine Rollen</div><div class="dc-e-desc">Klick auf einen Button, um eine Rolle zu bekommen. Nochmal klicken gibt sie wieder ab.</div><div class="dc-e-foot">Stream-Bot • Self-Roles</div></div><div class="dc-btns"><span class="dc-btn red">🔴 Live-Ping</span><span class="dc-btn">🎮 Gaming</span><span class="dc-btn">🎬 Clips</span><span class="dc-btn">📅 Zeitplan-Ping</span></div></div></div><div class="dc-msg"><div class="dc-ava"><svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" fill="#0b0404"/><circle cx="20" cy="20" r="15" fill="none" stroke="#ff1f2a" stroke-width="2"/><polygon fill="#fff" points="22.8,9 16.9,20.6 19.4,20.6 14.4,31.6 23.4,20.6 20.6,20.6"/></svg></div><div><div class="dc-meta"><span class="dc-name red">Stream-Bot</span><span class="dc-app">APP</span><time>Heute um 19:12</time></div><div class="dc-text">✅ Du hast jetzt die Rolle <span class="dc-role">@Live-Ping</span> und wirst bei jedem Stream erwähnt.</div><div class="dc-eph">👁 Nur du kannst das sehen</div></div></div></div></div></div><div class="wm" aria-hidden="true"></div></div></div>
+      <div class="feature"><div class="feature-copy"><h3>Stream-Zeitplan</h3><p>Dein Wochenplan steht direkt im Discord und zeigt immer, wann der nächste Stream kommt.</p><ul class="ticks"><li>Wochenansicht mit Uhrzeit und Spiel</li><li>Hinweis auf den nächsten Stream</li><li>Optional mit Zeitplan-Ping</li></ul></div><div class="preview" role="img" aria-label="Vorschau Stream-Zeitplan im Discord mit Beispieldaten"><div inert><div class="dc"><div class="dc-top"><span class="h">#</span><b>📅│zeitplan</b></div><div class="dc-feed"><div class="dc-msg"><div class="dc-ava"><svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" fill="#0b0404"/><circle cx="20" cy="20" r="15" fill="none" stroke="#ff1f2a" stroke-width="2"/><polygon fill="#fff" points="22.8,9 16.9,20.6 19.4,20.6 14.4,31.6 23.4,20.6 20.6,20.6"/></svg></div><div><div class="dc-meta"><span class="dc-name red">Stream-Bot</span><span class="dc-app">APP</span><time>Montag um 10:00</time></div><div class="dc-embed"><div class="dc-e-title plain">📅 Stream-Zeitplan · KW 42</div><div class="dc-fields two"><div class="dc-field"><b>Montag</b><span>20:00 · Just Chatting</span></div><div class="dc-field"><b>Mittwoch</b><span>19:30 · VALORANT</span></div><div class="dc-field"><b>Freitag</b><span>20:00 · Community-Abend</span></div><div class="dc-field"><b>Samstag</b><span>18:00 · Zuschauer-Runden</span></div></div><div class="dc-e-foot">Nächster Stream: Freitag 20:00</div></div></div></div></div></div></div><div class="wm" aria-hidden="true"></div></div></div>
+    </div>
+  </section>
+
+  <section class="band band-alt" id="obs">
+    <div class="wrap">
+      <div class="feature"><div class="feature-copy"><span class="chip-state hot">Auf Wunsch</span><h3>OBS-Hilfe</h3><p>Du willst streamen, aber OBS macht noch nicht, was es soll? Bei Bedarf helfe ich dir beim Einrichten. Sag im Ticket einfach, wo es hakt.</p><ul class="ticks"><li>Szenen und Quellen sauber anlegen</li><li>Alerts und Overlays einbinden</li><li>Mikrofon und Sound einstellen</li><li>Stream-Einstellungen für Twitch</li></ul></div><div class="preview" role="img" aria-label="Beispielansicht einer OBS-Einrichtung"><div inert><div class="obs"><div class="obs-preview"><span class="live-pill"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M13.6 1.8 3.9 13.6h6.6l-1.3 8.6 10-12.4h-6.8z"/></svg>Live</span><span class="obs-cam"></span><span class="obs-alert">⚡ mika folgt jetzt!</span><span class="obs-label">SZENE · LIVE</span></div><div class="obs-docks"><div class="obs-dock"><h5>Szenen</h5><span>Starting Soon</span><span class="on">Live</span><span>Pause</span><span>Ende</span></div><div class="obs-dock"><h5>Quellen</h5><span>👁 Webcam</span><span>👁 Spiel-Aufnahme</span><span>👁 Alerts</span><span>👁 Chat-Overlay</span></div><div class="obs-dock"><h5>Audio-Mixer</h5><div class="obs-mix"><small>Mikrofon</small><i style="--v:72%"></i></div><div class="obs-mix"><small>Desktop</small><i style="--v:48%"></i></div><div class="obs-mix"><small>Musik</small><i style="--v:22%"></i></div></div></div></div></div><div class="wm" aria-hidden="true"></div></div></div>
+    </div>
+  </section>
+
+  <section class="band" id="twitch">
+    <div class="wrap">
+      <div class="feature"><div class="feature-copy"><span class="chip-state">In Vorbereitung</span><h3>Bald: Twitch-Bots</h3><p>Eigene Twitch-Bots, die direkt an deinen Kanal angebunden sind und genau das machen, was du brauchst. Befehle, Begrüßungen, Hinweise auf deinen Discord: du sagst, was rein soll.</p><ul class="ticks"><li>Angebunden an deinen Twitch-Kanal</li><li>Gebaut nach deinen Wünschen</li><li>Passend zu deinem Discord-Bot</li></ul></div><div class="preview" role="img" aria-label="Konzept-Beispiel eines Twitch-Bots im Stream-Chat"><div inert><div class="tw"><div class="tw-top">STREAM-CHAT</div><div class="tw-feed"><p><b style="color:#ff7ab6">nova_live</b><span class="">!discord</span></p><p><b style="color:#ff4d55">DeinKanalBot</b><span class="bot">Komm auf unseren Discord, Link steht im Panel ⚡</span></p><p><b style="color:#ff4d55">DeinKanalBot</b><span class="bot">Danke für den Follow, mika! 💜</span></p><p><b style="color:#5fb8ff">max_92</b><span class="">!zeitplan</span></p><p><b style="color:#ff4d55">DeinKanalBot</b><span class="bot">Nächster Stream: Freitag 20:00 · VALORANT</span></p><p><b style="color:#8fe08a">lena_tv</b><span class="">!lurk</span></p><p><b style="color:#ff4d55">DeinKanalBot</b><span class="bot">Viel Spaß beim Lurken, lena_tv 👀</span></p></div><div class="tw-input">Nachricht senden</div></div></div><div class="wm" aria-hidden="true"></div></div></div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap"><div class="final-in">
+      <h2>Dein Stream <span>verdient Alerts.</span></h2>
+      <p>Öffne ein Ticket auf dem VOLT-Discord und wähle Streamer-Bot oder OBS-Einrichtung. Alles kostenlos, Spenden freiwillig.</p>
+      <div class="cta-row">
+        <a class="btn btn-red" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/></svg>Discord beitreten</a>
+        <a class="btn btn-line" href="#" data-donate hidden target="_blank" rel="noopener">💛 Freiwillig spenden</a>
+      </div>
+    </div></div>
+  </section>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <img class="foot-banner" src="assets/img/volt-banner.webp" width="1642" height="377" alt="VOLT – Discord Solutions" loading="lazy">
+        <p>Discord-Bots, Server-Setups und Dashboards. Gebaut und betreut von einer Person. Alles kostenlos, Spenden freiwillig.</p>
+      </div>
+      <div>
+        <h4>Seiten</h4>
+        <ul>
+          <li><a href="index.html">Start</a></li>
+          <li><a href="streamer.html">Streamer-Bot</a></li>
+          <li><a href="fraktion.html">Fraktions-Dashboard</a></li>
+          <li><a href="index.html#status">Live-Status</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Loslegen</h4>
+        <ul>
+          <li><a href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite>Discord beitreten</a></li>
+          <li><a href="index.html#bewertungen">Bewertungen</a></li>
+          <li><a href="index.html#faq">FAQ</a></li>
+          <li><a href="#" data-donate hidden target="_blank" rel="noopener">Spenden</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <span>© <span data-year>2026</span> VOLT – Discord Solutions · Alle Vorschauen mit Beispieldaten</span>
+      <nav aria-label="Rechtliches"><a href="impressum.html">Impressum</a><a href="datenschutz.html">Datenschutz</a></nav>
+    </div>
+  </div>
+</footer>
+</body>
+</html>
