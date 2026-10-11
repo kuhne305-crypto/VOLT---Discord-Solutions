@@ -41,6 +41,7 @@ SITE_PORT = int(os.environ.get("PORT", "8080"))
 MAX_PARALLEL = max(1, int(os.environ.get("MAX_PARALLEL", "2")))            # Projekte gleichzeitig
 PROJECTS_PER_DAY = max(0.1, float(os.environ.get("PROJECTS_PER_DAY", "1")))  # normales Tempo
 DISCORD_INVITE_URL = os.environ.get("DISCORD_INVITE_URL", "https://discord.gg/RpUtNGT6uj")
+SITE_URL = os.environ.get("SITE_URL", "https://volt-discord-solutions.up.railway.app").rstrip("/")
 
 MIN_ACCOUNT_AGE_DAYS = int(os.environ.get("MIN_ACCOUNT_AGE_DAYS", "3"))  # 0 = aus
 RAID_JOINS = int(os.environ.get("RAID_JOINS", "6"))      # so viele Joins ...
@@ -1924,22 +1925,42 @@ async def site_middleware(request: web.Request, handler):
     return resp
 
 
+async def site_robots(request: web.Request) -> web.Response:
+    return web.Response(text=f"User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: {SITE_URL}/sitemap.xml\n")
+
+
+async def site_sitemap(request: web.Request) -> web.Response:
+    urls = "".join(f"<url><loc>{SITE_URL}/{p}</loc></url>"
+                   for p in ("", "streamer.html", "fraktion.html", "datenschutz.html", "impressum.html"))
+    return web.Response(content_type="application/xml",
+                        text=f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>')
+
+
+async def site_health(request: web.Request) -> web.Response:
+    return web.Response(text="ok", headers={"Cache-Control": "no-store"})
+
+
 async def start_website():
     global _site_runner
     if not SITE_ENABLED:
+        print("Website: SITE_ENABLED=0, Website bleibt aus.")
         return
     if not os.path.isdir(WEB_DIR):
-        print("Website: Ordner 'web' fehlt, Website bleibt aus.")
+        print(f"Website: Ordner 'web' fehlt (gesucht in {WEB_DIR}). Lege ihn neben bot.py ab.")
         return
     app = web.Application(middlewares=[site_middleware])
     app.router.add_get("/api/stats", api_stats)
+    app.router.add_get("/health", site_health)
+    app.router.add_get("/robots.txt", site_robots)
+    app.router.add_get("/sitemap.xml", site_sitemap)
     app.router.add_static("/assets/", os.path.join(WEB_DIR, "assets"), show_index=False, follow_symlinks=False)
     app.router.add_get("/", site_page)
     app.router.add_get("/{name}", site_page)
     _site_runner = web.AppRunner(app, access_log=None)
     await _site_runner.setup()
     await web.TCPSite(_site_runner, "0.0.0.0", SITE_PORT).start()
-    print(f"Website läuft auf Port {SITE_PORT}")
+    src = "aus Railway-Variable PORT" if os.environ.get("PORT") else "Standard, PORT nicht gesetzt"
+    print(f"Website läuft auf Port {SITE_PORT} ({src}) → {SITE_URL}")
 
 
 async def migrate_db():
@@ -1959,7 +1980,6 @@ async def setup_hook():
     await pool.connect()
     await migrate_db()
     print(f"Datenbank: {DB_PATH}")
-    await start_website()
     for v in (VerifyView(), TicketPanelView(), AdminPanelView(), OfferView(), ReviewView(), FaqView()):
         bot.add_view(v)
     if GUILD_ID:
@@ -1976,5 +1996,13 @@ async def on_ready():
     print(f"VOLT online als {bot.user} ({bot.user.id})")
 
 
+async def main():
+    discord.utils.setup_logging()
+    async with bot:
+        # Website zuerst starten: Sie ist erreichbar, auch wenn der Discord-Login mal hakt
+        await start_website()
+        await bot.start(TOKEN)
+
+
 if __name__ == "__main__":
-    bot.run(TOKEN)
+    asyncio.run(main())
