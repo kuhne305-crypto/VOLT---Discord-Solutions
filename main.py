@@ -59,7 +59,8 @@ intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+# max_messages: mehr Nachrichten im Speicher = bei Bearbeiten/Löschen ist der alte Text im Mod-Log bekannt
+bot = commands.Bot(command_prefix="!", intents=intents, max_messages=10000)
 pool = None  # DB-Objekt, wird im setup_hook gesetzt
 
 
@@ -270,6 +271,9 @@ CREATE TABLE IF NOT EXISTS reviews (
   comment TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS dm_optout (
   user_id INTEGER PRIMARY KEY, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS work_sessions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL,
+  started_at REAL NOT NULL, ended_at REAL);
 """
 
 
@@ -365,6 +369,72 @@ async def notify_ticket_owner(guild: discord.Guild, ticket, title: str, text: st
 
 
 # ===============================================================
+# WERKBANK & ZEITERFASSUNG
+# /platz 1|2 legt ein Ticket auf die Werkbank und startet die Uhr.
+# /zeit pause|weiter steuert sie. Bei Läuft/Wartung/Archiv/Abgelehnt
+# wird der Platz automatisch frei und die Uhr gestoppt.
+# ===============================================================
+async def timer_running(ticket_id: int) -> bool:
+    return bool(await pool.fetchval(
+        "SELECT 1 FROM work_sessions WHERE ticket_id=$1 AND ended_at IS NULL", ticket_id))
+
+
+async def start_timer(ticket_id: int):
+    if not await timer_running(ticket_id):
+        await pool.execute("INSERT INTO work_sessions (ticket_id, started_at) VALUES ($1, $2)", ticket_id, time.time())
+
+
+async def stop_timer(ticket_id: int):
+    await pool.execute("UPDATE work_sessions SET ended_at=$1 WHERE ticket_id=$2 AND ended_at IS NULL",
+                       time.time(), ticket_id)
+
+
+async def work_seconds(ticket_id: int) -> float:
+    v = await pool.fetchval(
+        "SELECT sum(coalesce(ended_at, $1) - started_at) FROM work_sessions WHERE ticket_id=$2", time.time(), ticket_id)
+    return float(v or 0)
+
+
+def fmt_dur(sec) -> str:
+    sec = int(sec or 0)
+    h, m = sec // 3600, (sec % 3600) // 60
+    if h:
+        return f"{h} Std {m:02d} Min"
+    return f"{m} Min" if m else "unter 1 Min"
+
+
+async def free_slot(ticket_id: int):
+    await stop_timer(ticket_id)
+    await pool.execute("UPDATE tickets SET slot=NULL WHERE id=$1", ticket_id)
+    invalidate_site_cache()
+
+
+async def has_review(ticket_id: int) -> bool:
+    return bool(await pool.fetchval("SELECT 1 FROM reviews WHERE ticket_id=$1", ticket_id))
+
+
+async def request_review(guild: discord.Guild, channel, ticket, *, dm: bool = True, by=None) -> bool:
+    """Bittet den Kunden im Ticket (und per DM) um eine Bewertung, falls noch keine da ist."""
+    if await has_review(ticket["id"]):
+        return False
+    member = guild.get_member(ticket["user_id"])
+    await channel.send(
+        content=member.mention if member else None,
+        embed=emb("⭐ Wie zufrieden bist du?",
+                  f"**{ticket['project_name']}** läuft! Wenn alles passt, freue ich mich über eine kurze Bewertung "
+                  f"mit 1 bis 5 Sternen. Sie erscheint in #bewertungen und auf der Website.\n\n"
+                  f"Spenden sind freiwillig. 💛"),
+        view=ReviewView())
+    if DONATION_URL:
+        await channel.send(view=donate_view())
+    if dm:
+        await notify_ticket_owner(guild, ticket, "⭐ Bewerte dein Projekt",
+                                  f"**{ticket['project_name']}** läuft! Wenn du zufrieden bist, kannst du es jetzt "
+                                  f"im Ticket mit 1 bis 5 Sternen bewerten.", force=True, author=by)
+    return True
+
+
+# ===============================================================
 # TICKET-STATUS
 # ===============================================================
 STATUS = {
@@ -398,6 +468,33 @@ def rename_wait(channel_id: int) -> int:
     return 0
 
 
+# Umbenennungen, die Discord gerade blockt, werden automatisch nachgeholt.
+# Kommen mehrere Statuswechsel hintereinander, gewinnt immer der neueste Name.
+_pending_rename: dict[int, str] = {}
+_rename_tasks: dict[int, asyncio.Task] = {}
+
+
+async def _rename_later(channel: discord.TextChannel, wait: int):
+    try:
+        await asyncio.sleep(wait)
+        name = _pending_rename.pop(channel.id, None)
+        ch = channel.guild.get_channel(channel.id)
+        if not name or ch is None or ch.name == name:
+            return
+        await ch.edit(name=name, reason="VOLT Ticket: Kanalname nachgezogen")
+        rename_log[channel.id].append(time.time())
+    except discord.HTTPException:
+        pass
+    finally:
+        _rename_tasks.pop(channel.id, None)
+
+
+def schedule_rename(channel: discord.TextChannel, name: str, wait: int):
+    _pending_rename[channel.id] = name
+    if channel.id not in _rename_tasks:
+        _rename_tasks[channel.id] = asyncio.create_task(_rename_later(channel, wait))
+
+
 def slugify(text: str) -> str:
     text = re.sub(r"[^a-z0-9äöüß]+", "-", text.lower().strip()).strip("-")
     return text[:40] or "projekt"
@@ -408,11 +505,18 @@ async def apply_status(guild: discord.Guild, channel: discord.TextChannel, ticke
     name = f"{emoji}│{ticket['slug']}"
     cat = find_category(guild, cat_key)
     kwargs = {}
+    delayed = 0
     if channel.name != name:
         wait = rename_wait(channel.id)
         if wait:
-            return False, wait
-        kwargs["name"] = name
+            # Discord blockt gerade: Status gilt trotzdem sofort, der Name folgt automatisch
+            schedule_rename(channel, name, wait)
+            delayed = wait
+        else:
+            kwargs["name"] = name
+            _pending_rename.pop(channel.id, None)
+    elif channel.id in _pending_rename:
+        _pending_rename.pop(channel.id, None)  # Name passt schon wieder, nichts nachholen
     if cat and channel.category_id != cat.id:
         kwargs["category"] = cat
     if kwargs:
@@ -436,8 +540,13 @@ async def apply_status(guild: discord.Guild, channel: discord.TextChannel, ticke
     elif status == "running":
         await pool.execute(
             "UPDATE tickets SET live_at=COALESCE(live_at, CURRENT_TIMESTAMP) WHERE id=$1", ticket["id"])
+    # Werkbank: fertig/geschlossen -> Platz frei, Uhr stoppt; wartet auf Kunde -> nur Uhr stoppt
+    if status in ("running", "maintenance", "archived", "rejected"):
+        await free_slot(ticket["id"])
+    elif status == "paused":
+        await stop_timer(ticket["id"])
     invalidate_site_cache()
-    return True, 0
+    return True, delayed
 
 
 async def make_transcript(channel: discord.TextChannel, ticket) -> discord.File:
@@ -671,7 +780,7 @@ class DeleteConfirm(discord.ui.View):
             await log(interaction.guild, "ticket-logs",
                       emb("🗑️ Ticket gelöscht", f"#{self.ticket['id']} · {self.ticket['project_name']}"), file=f)
             await pool.execute("UPDATE tickets SET status='deleted' WHERE id=$1", self.ticket["id"])
-            invalidate_site_cache()
+            await free_slot(self.ticket["id"])
             await channel.delete(reason="VOLT Ticket gelöscht")
         except discord.HTTPException as e:
             await interaction.followup.send(f"❌ Fehler: {e}", ephemeral=True)
@@ -687,22 +796,28 @@ async def change_status(interaction: discord.Interaction, status: str):
             "❌ Erst muss der Kunde das Angebot bestätigen.", ephemeral=True)
 
     await interaction.response.defer(ephemeral=True)
-    ok, wait = await apply_status(interaction.guild, interaction.channel, ticket, status)
-    if not ok:
-        return await interaction.followup.send(
-            f"⏳ Discord erlaubt nur 2 Umbenennungen pro 10 Minuten. Versuch es in ca. {wait}s erneut.",
-            ephemeral=True)
+    _, delayed = await apply_status(interaction.guild, interaction.channel, ticket, status)
 
     emoji, _, label = STATUS[status]
     member = interaction.guild.get_member(ticket["user_id"])
-    await interaction.channel.send(
-        content=member.mention if member else None,
-        embed=emb(f"{emoji} Status: {label}", STATUS_TEXT.get(status, "")))
+    worked = await work_seconds(ticket["id"])
+    status_e = emb(f"{emoji} Status: {label}", STATUS_TEXT.get(status, ""))
+    if status in ("running", "archived") and worked > 0:
+        status_e.add_field(name="⏱️ Arbeitszeit", value=fmt_dur(worked))
+    await interaction.channel.send(content=member.mention if member else None, embed=status_e)
     await log(interaction.guild, "ticket-logs",
-              emb(f"{emoji} Status geändert", f"#{ticket['id']} · {ticket['project_name']} → **{label}**"))
+              emb(f"{emoji} Status geändert", f"#{ticket['id']} · {ticket['project_name']} → **{label}**"
+                  + (f"\nArbeitszeit bisher: {fmt_dur(worked)}" if worked > 0 else "")))
+    review_open = status == "running" and not await has_review(ticket["id"])
     await notify_ticket_owner(interaction.guild, ticket, f"{emoji} Neuer Status: {label}",
-                              STATUS_TEXT.get(status, "Der Status deines Projekts hat sich geändert."),
+                              STATUS_TEXT.get(status, "Der Status deines Projekts hat sich geändert.")
+                              + ("\n\n⭐ Wenn du zufrieden bist, kannst du dein Projekt jetzt im Ticket bewerten."
+                                 if review_open else ""),
                               force=True, author=interaction.user)
+
+    if review_open:
+        # Projekt ist live: Kunde wird direkt um eine Bewertung gebeten (DM kam schon mit dem Status)
+        await request_review(interaction.guild, interaction.channel, ticket, dm=False)
 
     if status == "archived":
         try:
@@ -712,15 +827,11 @@ async def change_status(interaction: discord.Interaction, status: str):
         except discord.HTTPException:
             pass
         if prev in ACTIVE_STATES:
-            await interaction.channel.send(
-                content=member.mention if member else None,
-                embed=emb("⭐ Wie zufrieden warst du?",
-                          "Gib uns kurz eine Bewertung. Sie erscheint in #bewertungen.\n"
-                          "Wenn dir die Arbeit gefallen hat, freuen wir uns über eine freiwillige Spende. 💛"),
-                view=ReviewView())
-            if DONATION_URL:
-                await interaction.channel.send(view=donate_view())
-    await interaction.followup.send("✅ Status aktualisiert.", ephemeral=True)
+            # Noch keine Bewertung? Dann zum Abschluss nochmal freundlich fragen
+            await request_review(interaction.guild, interaction.channel, ticket, dm=False)
+    await interaction.followup.send(
+        "✅ Status aktualisiert." + (f" Den Kanalnamen zieht der Bot in ca. {max(1, round(delayed / 60))} Min "
+                                    f"automatisch nach (Discord-Limit)." if delayed else ""), ephemeral=True)
 
 
 class AdminPanelView(discord.ui.View):
@@ -825,10 +936,7 @@ class OfferView(discord.ui.View):
         if not ticket:
             return
         await interaction.response.defer()
-        ok, wait = await apply_status(interaction.guild, interaction.channel, ticket, "progress")
-        if not ok:
-            return await interaction.followup.send(
-                f"⏳ Bitte in ca. {wait}s noch einmal bestätigen (Discord-Limit).", ephemeral=True)
+        await apply_status(interaction.guild, interaction.channel, ticket, "progress")
         kunde = find_role(interaction.guild, "kunde")
         if kunde:
             await interaction.user.add_roles(kunde, reason="Angebot bestätigt")
@@ -847,10 +955,7 @@ class OfferView(discord.ui.View):
         if not ticket:
             return
         await interaction.response.defer()
-        ok, wait = await apply_status(interaction.guild, interaction.channel, ticket, "rejected")
-        if not ok:
-            return await interaction.followup.send(
-                f"⏳ Bitte in ca. {wait}s noch einmal versuchen (Discord-Limit).", ephemeral=True)
+        await apply_status(interaction.guild, interaction.channel, ticket, "rejected")
         await interaction.message.edit(view=None)
         await interaction.channel.send(embed=emb(
             "🔴 Angebot abgelehnt", "Das Ticket wurde geschlossen. Du kannst jederzeit ein neues öffnen.",
@@ -956,7 +1061,13 @@ class ReviewModal(discord.ui.Modal, title="Deine Bewertung"):
         e.set_author(name=interaction.user.display_name,
                      icon_url=interaction.user.display_avatar.url)
         e.set_footer(text=f"{BRAND} • Bewertung #{rid}")
-        await log(interaction.guild, "bewertungen", e)
+        ch = find_channel(interaction.guild, "bewertungen")
+        if ch:
+            try:  # Nachricht merken, damit sie beim Löschen der Bewertung mit verschwindet
+                msg = await ch.send(embed=e)
+                await pool.execute("UPDATE reviews SET message_id=$1 WHERE id=$2", msg.id, rid)
+            except discord.HTTPException:
+                pass
         await interaction.response.send_message("💛 Danke für deine Bewertung!", ephemeral=True)
         invalidate_site_cache()
         await refresh_review_panel(interaction.guild)
@@ -1149,6 +1260,9 @@ def owner_check():
 async def on_app_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.CheckFailure):
         msg = "❌ Keine Berechtigung."
+    elif isinstance(error, app_commands.CommandNotFound):
+        msg = ("❌ Diesen Befehl gibt es nicht mehr. Discord aktualisiert die Befehlsliste gerade – "
+               "drück Strg+R (am Handy App neu starten) und nutze /hilfe.")
     else:
         msg = f"❌ Fehler: {error}"
         print("Command-Fehler:", repr(error))
@@ -1160,6 +1274,7 @@ async def on_app_error(interaction: discord.Interaction, error):
 
 @bot.tree.command(name="warn", description="User verwarnen (3 Warns = Timeout, 5 = Bann)")
 @app_commands.guild_only()
+@app_commands.default_permissions(moderate_members=True)
 @team_check()
 async def warn_cmd(interaction: discord.Interaction, user: discord.Member, grund: str):
     if not can_moderate(interaction.user, user):
@@ -1174,6 +1289,7 @@ async def warn_cmd(interaction: discord.Interaction, user: discord.Member, grund
 
 @bot.tree.command(name="warns", description="Warns eines Users anzeigen")
 @app_commands.guild_only()
+@app_commands.default_permissions(moderate_members=True)
 @team_check()
 async def warns_cmd(interaction: discord.Interaction, user: discord.Member):
     rows = await pool.fetch("SELECT * FROM warns WHERE user_id=$1 ORDER BY id", user.id)
@@ -1185,6 +1301,7 @@ async def warns_cmd(interaction: discord.Interaction, user: discord.Member):
 
 @bot.tree.command(name="clearwarns", description="Alle Warns eines Users löschen")
 @app_commands.guild_only()
+@app_commands.default_permissions(moderate_members=True)
 @team_check()
 async def clearwarns_cmd(interaction: discord.Interaction, user: discord.Member):
     await pool.execute("DELETE FROM warns WHERE user_id=$1", user.id)
@@ -1194,6 +1311,7 @@ async def clearwarns_cmd(interaction: discord.Interaction, user: discord.Member)
 
 @bot.tree.command(name="timeout", description="User in den Timeout schicken")
 @app_commands.guild_only()
+@app_commands.default_permissions(moderate_members=True)
 @team_check()
 @app_commands.describe(minuten="Dauer in Minuten (max. 40320)")
 async def timeout_cmd(interaction: discord.Interaction, user: discord.Member, minuten: int, grund: str = "–"):
@@ -1207,6 +1325,7 @@ async def timeout_cmd(interaction: discord.Interaction, user: discord.Member, mi
 
 @bot.tree.command(name="kick", description="User kicken")
 @app_commands.guild_only()
+@app_commands.default_permissions(moderate_members=True)
 @team_check()
 async def kick_cmd(interaction: discord.Interaction, user: discord.Member, grund: str = "–"):
     if not can_moderate(interaction.user, user):
@@ -1219,6 +1338,7 @@ async def kick_cmd(interaction: discord.Interaction, user: discord.Member, grund
 
 @bot.tree.command(name="ban", description="User bannen")
 @app_commands.guild_only()
+@app_commands.default_permissions(moderate_members=True)
 @team_check()
 async def ban_cmd(interaction: discord.Interaction, user: discord.Member, grund: str = "–"):
     if not can_moderate(interaction.user, user):
@@ -1231,6 +1351,7 @@ async def ban_cmd(interaction: discord.Interaction, user: discord.Member, grund:
 
 @bot.tree.command(name="unban", description="User per ID entbannen")
 @app_commands.guild_only()
+@app_commands.default_permissions(moderate_members=True)
 @team_check()
 async def unban_cmd(interaction: discord.Interaction, user_id: str):
     try:
@@ -1243,7 +1364,7 @@ async def unban_cmd(interaction: discord.Interaction, user_id: str):
 
 # ---- Blacklist ------------------------------------------------
 blacklist = app_commands.Group(name="blacklist", description="Ticket-Blacklist (nur Owner)",
-                               guild_only=True)
+                               guild_only=True, default_permissions=discord.Permissions(administrator=True))
 
 
 @blacklist.command(name="add", description="User von Tickets sperren")
@@ -1292,6 +1413,7 @@ async def projekt_cmd(interaction: discord.Interaction):
 
 @bot.tree.command(name="benachrichtigen", description="Einem User eine DM-Benachrichtigung schicken (Team)")
 @app_commands.guild_only()
+@app_commands.default_permissions(moderate_members=True)
 @team_check()
 @app_commands.describe(user="Wer soll die DM bekommen?", nachricht="Was soll in der DM stehen?")
 async def notify_cmd(interaction: discord.Interaction, user: discord.Member,
@@ -1338,6 +1460,135 @@ async def dm_toggle_cmd(interaction: discord.Interaction, status: app_commands.C
     await interaction.response.send_message(msg, ephemeral=True)
 
 
+# ---- Werkbank & Zeit (nur Owner, im Ticket) ---------------------
+@bot.tree.command(name="platz", description="Ticket auf die Werkbank legen, Zeit startet (nur Owner, im Ticket)")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@owner_check()
+@app_commands.describe(nummer="Platz 1, Platz 2 oder frei")
+@app_commands.choices(nummer=[app_commands.Choice(name="Platz 1", value="1"),
+                              app_commands.Choice(name="Platz 2", value="2"),
+                              app_commands.Choice(name="frei (von der Werkbank nehmen)", value="frei")])
+async def platz_cmd(interaction: discord.Interaction, nummer: app_commands.Choice[str]):
+    ticket = await get_ticket(interaction.channel.id)
+    if not ticket or ticket["status"] == "deleted":
+        return await interaction.response.send_message("❌ Das geht nur in einem Ticket.", ephemeral=True)
+    if nummer.value == "frei":
+        await free_slot(ticket["id"])
+        total = await work_seconds(ticket["id"])
+        await interaction.response.send_message(
+            f"✅ **{ticket['project_name']}** ist von der Werkbank genommen, Zeit gestoppt. "
+            f"Arbeitszeit bisher: **{fmt_dur(total)}**", ephemeral=True)
+        return await log(interaction.guild, "ticket-logs", emb(
+            "🧰 Platz frei", f"#{ticket['id']} · {ticket['project_name']} · bisher {fmt_dur(total)}"))
+    if ticket["status"] in ("open", "offered"):
+        return await interaction.response.send_message(
+            "❌ Erst muss der Kunde bestätigen, dann kommt das Projekt auf die Werkbank.", ephemeral=True)
+    if ticket["status"] in ("archived", "rejected"):
+        return await interaction.response.send_message("❌ Dieses Ticket ist geschlossen.", ephemeral=True)
+    n = int(nummer.value)
+    if n > MAX_PARALLEL:
+        return await interaction.response.send_message(f"❌ Es gibt nur {MAX_PARALLEL} Plätze.", ephemeral=True)
+
+    await interaction.response.defer(ephemeral=True)
+    moved = ""
+    other = await pool.fetchrow(
+        "SELECT * FROM tickets WHERE slot=$1 AND id<>$2 AND status NOT IN ('archived','rejected','deleted')",
+        n, ticket["id"])
+    if other:
+        await free_slot(other["id"])
+        moved = (f"\n↪️ **{other['project_name']}** (#{other['id']}) lag dort und ist jetzt wieder in der "
+                 f"Warteschlange, seine Zeit ist gestoppt.")
+    await pool.execute("UPDATE tickets SET slot=$1 WHERE id=$2", n, ticket["id"])
+    if ticket["status"] == "paused":
+        await apply_status(interaction.guild, interaction.channel, ticket, "progress")
+    await start_timer(ticket["id"])
+    invalidate_site_cache()
+    total = await work_seconds(ticket["id"])
+
+    member = interaction.guild.get_member(ticket["user_id"])
+    await interaction.channel.send(
+        content=member.mention if member else None,
+        embed=emb("🔧 Ich arbeite jetzt an deinem Projekt",
+                  f"**{ticket['project_name']}** liegt auf **Platz {n}** der Werkbank. "
+                  f"Den Stand siehst du auch live auf der Website."))
+    await notify_ticket_owner(interaction.guild, ticket, "🔧 Dein Projekt ist auf der Werkbank",
+                              f"Ich arbeite jetzt an **{ticket['project_name']}** (Platz {n}).",
+                              force=True, author=interaction.user)
+    await log(interaction.guild, "ticket-logs", emb(
+        f"🧰 Platz {n} belegt", f"#{ticket['id']} · {ticket['project_name']} · Zeit läuft (bisher {fmt_dur(total)})"))
+    await interaction.followup.send(f"✅ Platz {n} belegt, die Zeit läuft (bisher {fmt_dur(total)}).{moved}",
+                                    ephemeral=True)
+
+
+@bot.tree.command(name="zeit", description="Arbeitszeit im Ticket pausieren, weiterlaufen lassen oder anzeigen (nur Owner)")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@owner_check()
+@app_commands.choices(aktion=[app_commands.Choice(name="pause", value="pause"),
+                              app_commands.Choice(name="weiter", value="weiter"),
+                              app_commands.Choice(name="anzeigen", value="anzeigen")])
+async def zeit_cmd(interaction: discord.Interaction, aktion: app_commands.Choice[str]):
+    ticket = await get_ticket(interaction.channel.id)
+    if not ticket or ticket["status"] == "deleted":
+        return await interaction.response.send_message("❌ Das geht nur in einem Ticket.", ephemeral=True)
+    tid = ticket["id"]
+    running = await timer_running(tid)
+    if aktion.value == "pause":
+        if not running:
+            return await interaction.response.send_message("⏸️ Die Zeit läuft gerade nicht.", ephemeral=True)
+        await stop_timer(tid)
+        invalidate_site_cache()
+        msg = f"⏸️ Zeit gestoppt. Gesamt bisher: **{fmt_dur(await work_seconds(tid))}**"
+    elif aktion.value == "weiter":
+        if not ticket["slot"]:
+            return await interaction.response.send_message(
+                "❌ Leg das Ticket erst mit `/platz 1` oder `/platz 2` auf die Werkbank.", ephemeral=True)
+        if running:
+            return await interaction.response.send_message("▶️ Die Zeit läuft schon.", ephemeral=True)
+        await start_timer(tid)
+        invalidate_site_cache()
+        msg = f"▶️ Zeit läuft weiter. Gesamt bisher: **{fmt_dur(await work_seconds(tid))}**"
+    else:
+        sessions = await pool.fetchval("SELECT count(*) FROM work_sessions WHERE ticket_id=$1", tid) or 0
+        msg = (f"⏱️ **{ticket['project_name']}**\nArbeitszeit: **{fmt_dur(await work_seconds(tid))}** "
+               f"in {sessions} Abschnitt{'en' if sessions != 1 else ''}\n"
+               f"Werkbank: {('Platz ' + str(ticket['slot'])) if ticket['slot'] else 'nicht belegt'} · "
+               f"Uhr: {'läuft ▶️' if running else 'steht ⏸️'}")
+    await interaction.response.send_message(msg, ephemeral=True)
+
+
+@bot.tree.command(name="bewertung-anfragen", description="Kunden um eine Bewertung bitten (nur Owner)")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@owner_check()
+@app_commands.choices(ziel=[app_commands.Choice(name="dieses Ticket", value="dieses"),
+                            app_commands.Choice(name="alle laufenden Projekte ohne Bewertung", value="alle")])
+async def review_request_cmd(interaction: discord.Interaction, ziel: app_commands.Choice[str]):
+    if ziel.value == "dieses":
+        ticket = await get_ticket(interaction.channel.id)
+        if not ticket:
+            return await interaction.response.send_message("❌ Das geht nur in einem Ticket.", ephemeral=True)
+        if ticket["status"] not in ("running", "maintenance", "archived"):
+            return await interaction.response.send_message(
+                "❌ Bewerten geht erst, wenn das Projekt läuft.", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        ok = await request_review(interaction.guild, interaction.channel, ticket, by=interaction.user)
+        return await interaction.followup.send(
+            "✅ Bewertungs-Anfrage gesendet." if ok else "Dieses Projekt ist schon bewertet.", ephemeral=True)
+    await interaction.response.defer(ephemeral=True)
+    rows = await pool.fetch(
+        "SELECT * FROM tickets WHERE status IN ('running','maintenance') "
+        "AND id NOT IN (SELECT ticket_id FROM reviews WHERE ticket_id IS NOT NULL)")
+    sent = 0
+    for t in rows:
+        ch = interaction.guild.get_channel(t["channel_id"])
+        if ch and await request_review(interaction.guild, ch, t, by=interaction.user):
+            sent += 1
+    await interaction.followup.send(f"✅ {sent} von {len(rows)} laufenden Projekten um eine Bewertung gebeten.",
+                                    ephemeral=True)
+
+
 @bot.tree.command(name="bewerten", description="Ein fertiges Projekt bewerten (1–5 Sterne)")
 @app_commands.guild_only()
 async def bewerten_cmd(interaction: discord.Interaction):
@@ -1355,22 +1606,146 @@ async def bewerten_cmd(interaction: discord.Interaction):
                                             view=ReviewProjectView(rows), ephemeral=True)
 
 
-@bot.tree.command(name="bewertung-entfernen", description="Bewertung per Nummer löschen (nur Owner)")
-@app_commands.guild_only()
-@owner_check()
-@app_commands.describe(nummer="Die Nummer aus dem Footer, z. B. 12 bei 'Bewertung #12'")
-async def review_remove_cmd(interaction: discord.Interaction, nummer: int):
-    row = await pool.fetchrow("SELECT * FROM reviews WHERE id=$1", nummer)
+# ---- Bewertungen verwalten (nur Owner) -------------------------
+async def delete_review(guild: discord.Guild, rid: int, by: discord.abc.User):
+    """Löscht eine Bewertung aus der Datenbank, die Nachricht in #bewertungen und aktualisiert Website + Übersicht."""
+    row = await pool.fetchrow(
+        "SELECT r.*, t.project_name FROM reviews r LEFT JOIN tickets t ON t.id = r.ticket_id WHERE r.id=$1", rid)
     if not row:
-        return await interaction.response.send_message(f"❌ Bewertung #{nummer} gibt es nicht.", ephemeral=True)
-    await pool.execute("DELETE FROM reviews WHERE id=$1", nummer)
+        return None, False
+    await pool.execute("DELETE FROM reviews WHERE id=$1", rid)
     invalidate_site_cache()
+    msg_gone = False
+    ch = find_channel(guild, "bewertungen")
+    if ch:
+        try:
+            if row["message_id"]:
+                await (await ch.fetch_message(row["message_id"])).delete()
+                msg_gone = True
+            else:  # ältere Bewertungen: Nachricht über die Nummer im Footer suchen
+                async for m in ch.history(limit=300):
+                    if m.author.id == guild.me.id and m.embeds and \
+                            (m.embeds[0].footer.text or "").endswith(f"Bewertung #{rid}"):
+                        await m.delete()
+                        msg_gone = True
+                        break
+        except discord.HTTPException:
+            pass
+    await refresh_review_panel(guild)
+    await log(guild, "mod-logs", emb("🗑️ Bewertung gelöscht",
+                                     f"#{rid} · {row['stars']}/5 · {row['project_name'] or 'Projekt'}\n"
+                                     f"Kommentar: {(row['comment'] or '–')[:300]}\nDurch {by.mention}"))
+    return row, msg_gone
+
+
+def review_line(r) -> str:
+    text = (r["comment"] or "ohne Kommentar").replace("\n", " ")
+    return f"#{r['id']} · {'⭐' * int(r['stars'] or 0)} · {r['project_name'] or 'Projekt'} · {text}"
+
+
+class ReviewDeleteConfirm(discord.ui.View):
+    def __init__(self, rid: int):
+        super().__init__(timeout=120)
+        self.rid = rid
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != OWNER_ID:
+            await interaction.response.send_message("❌ Keine Berechtigung.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Ja, löschen", emoji="🗑️", style=discord.ButtonStyle.danger)
+    async def yes(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        row, gone = await delete_review(interaction.guild, self.rid, interaction.user)
+        if not row:
+            text = f"❌ Bewertung #{self.rid} gibt es nicht mehr."
+        else:
+            text = (f"✅ Bewertung #{self.rid} ({row['stars']}/5) gelöscht. Website und Übersicht sind aktualisiert"
+                    + (", die Nachricht in #bewertungen ist auch weg." if gone else
+                       ". Die Nachricht in #bewertungen habe ich nicht gefunden, lösch sie bitte selbst."))
+        await interaction.edit_original_response(content=text, embed=None, view=None)
+        self.stop()
+
+    @discord.ui.button(label="Abbrechen", style=discord.ButtonStyle.secondary)
+    async def no(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.edit_message(content="Abgebrochen, nichts gelöscht.", embed=None, view=None)
+        self.stop()
+
+
+async def ask_delete_review(interaction: discord.Interaction, rid: int):
+    row = await pool.fetchrow(
+        "SELECT r.*, t.project_name FROM reviews r LEFT JOIN tickets t ON t.id = r.ticket_id WHERE r.id=$1", rid)
+    if not row:
+        return await interaction.response.send_message(f"❌ Bewertung #{rid} gibt es nicht.", ephemeral=True)
+    e = emb(f"🗑️ Bewertung #{rid} löschen?", review_line(row)[:4000])
+    member = interaction.guild.get_member(row["user_id"]) if row["user_id"] else None
+    e.add_field(name="Von", value=member.mention if member else f"User-ID {row['user_id']}")
+    e.add_field(name="Datum", value=str(row["created_at"] or "–")[:16])
     await interaction.response.send_message(
-        f"✅ Bewertung #{nummer} ({row['stars']}/5) entfernt. Website und Übersicht sind aktualisiert. "
-        f"Die Nachricht in #bewertungen kannst du selbst löschen.", ephemeral=True)
-    await refresh_review_panel(interaction.guild)
-    await log(interaction.guild, "mod-logs", emb("🗑️ Bewertung entfernt",
-                                               f"#{nummer} · {row['stars']}/5 durch {interaction.user.mention}"))
+        "Wird aus der Datenbank, aus #bewertungen und von der Website entfernt.",
+        embed=e, view=ReviewDeleteConfirm(rid), ephemeral=True)
+
+
+async def review_autocomplete(interaction: discord.Interaction, current: str):
+    rows = await pool.fetch(
+        "SELECT r.id, r.stars, r.comment, t.project_name FROM reviews r "
+        "LEFT JOIN tickets t ON t.id = r.ticket_id ORDER BY r.id DESC LIMIT 100")
+    cur = (current or "").lower().lstrip("#")
+    out = []
+    for r in rows:
+        line = review_line(r)
+        if cur and cur not in line.lower():
+            continue
+        out.append(app_commands.Choice(name=line[:100], value=int(r["id"])))
+        if len(out) == 25:
+            break
+    return out
+
+
+@bot.tree.command(name="bewertung-loeschen", description="Eine Bewertung löschen (nur Owner)")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@owner_check()
+@app_commands.describe(bewertung="Tippen zum Suchen: Nummer, Sterne, Projekt oder Kommentar")
+@app_commands.autocomplete(bewertung=review_autocomplete)
+async def review_delete_cmd(interaction: discord.Interaction, bewertung: int):
+    await ask_delete_review(interaction, bewertung)
+
+
+@bot.tree.command(name="bewertungen-liste", description="Alle Bewertungen mit Nummer anzeigen (nur Owner)")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@owner_check()
+async def review_list_cmd(interaction: discord.Interaction):
+    rows = await pool.fetch(
+        "SELECT r.*, t.project_name FROM reviews r LEFT JOIN tickets t ON t.id = r.ticket_id ORDER BY r.id DESC LIMIT 25")
+    if not rows:
+        return await interaction.response.send_message("Noch keine Bewertungen.", ephemeral=True)
+    lines = [review_line(r)[:150] for r in rows]
+    count, avg, _ = await review_summary()
+    e = emb(f"⭐ Bewertungen · {avg:.1f}/5 aus {count}", "\n".join(lines)[:4000])
+    e.set_footer(text="Löschen: /bewertung-loeschen oder Rechtsklick auf die Bewertung → Apps → Bewertung löschen")
+    await interaction.response.send_message(embed=e, ephemeral=True)
+
+
+@bot.tree.context_menu(name="Bewertung löschen")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+async def review_delete_ctx(interaction: discord.Interaction, message: discord.Message):
+    if interaction.user.id != OWNER_ID:
+        return await interaction.response.send_message("❌ Keine Berechtigung.", ephemeral=True)
+    rid = None
+    if message.embeds:
+        m = re.search(r"Bewertung #(\d+)", message.embeds[0].footer.text or "")
+        if m:
+            rid = int(m.group(1))
+    if rid is None:
+        rid = await pool.fetchval("SELECT id FROM reviews WHERE message_id=$1", message.id)
+    if rid is None:
+        return await interaction.response.send_message(
+            "❌ Das ist keine Bewertung, die ich zuordnen kann. Nutze /bewertungen-liste.", ephemeral=True)
+    await ask_delete_review(interaction, rid)
 
 
 @bot.tree.command(name="spenden", description="Freiwillig unterstützen")
@@ -1384,11 +1759,92 @@ async def spenden_cmd(interaction: discord.Interaction):
 
 @bot.tree.command(name="panels", description="Info-/Verify-/Ticket-Panels neu posten (nur Owner)")
 @app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
 @owner_check()
 async def panels_cmd(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     await post_panels(interaction.guild)
     await interaction.followup.send("✅ Panels aktualisiert.", ephemeral=True)
+
+
+# ===============================================================
+# SICHERHEITS-STATUS & HILFE
+# ===============================================================
+@bot.tree.command(name="security-status", description="Zeigt alle Schutzsysteme und ob der Bot richtig eingerichtet ist")
+@app_commands.guild_only()
+@app_commands.default_permissions(moderate_members=True)
+@team_check()
+async def security_status_cmd(interaction: discord.Interaction):
+    guild = interaction.guild
+    me = guild.me
+    now = time.time()
+    p = me.guild_permissions
+    on, off = "🟢", "🔴"
+
+    top_ok = me.top_role.position >= max(r.position for r in guild.roles if not r.managed or r == me.top_role)
+    hp_bans = await pool.fetchval("SELECT value FROM stats WHERE key='honeypot_bans'") or 0
+    bl = await pool.fetchval("SELECT count(*) FROM blacklist") or 0
+    warns = await pool.fetchval("SELECT count(*) FROM warns") or 0
+    lock_left = int(raid_until - now) if raid_until > now else 0
+
+    e = emb("🛡️ Sicherheits-Status", "Alle Schutzsysteme von VOLT ADMIN auf einen Blick.",
+            0xE74C3C if lock_left else 0x2ECC71)
+    e.add_field(name=f"{on if MIN_ACCOUNT_AGE_DAYS else off} Join-Gate",
+                value=f"Accounts jünger als **{MIN_ACCOUNT_AGE_DAYS} Tage** werden gekickt" if MIN_ACCOUNT_AGE_DAYS
+                else "aus (MIN_ACCOUNT_AGE_DAYS=0)", inline=False)
+    e.add_field(name=f"{on} Anti-Raid",
+                value=f"{RAID_JOINS} Joins in {RAID_WINDOW}s → {RAID_LOCKDOWN}s Kick-Modus\n"
+                      + (f"⚠️ **Lockdown aktiv**, noch {lock_left}s" if lock_left else "Kein Raid erkannt"), inline=True)
+    e.add_field(name=f"{on} Anti-Nuke",
+                value=f"{NUKE_LIMIT} Löschungen/Bans in {NUKE_WINDOW}s → Bann", inline=True)
+    e.add_field(name=f"{on} Anti-Spam", value="6 Nachrichten in 6s oder 5+ Erwähnungen → 10 Min Timeout", inline=False)
+    e.add_field(name=f"{on} Link- & Invite-Filter", value="Fremde Invites: gelöscht + Warn\nLinks: nur Kunden & Tickets", inline=True)
+    hp = find_channel(guild, "nicht-schreiben")
+    e.add_field(name=f"{on if hp else off} Honeypot",
+                value=(f"{hp.mention} · **{hp_bans}** Spam-Accounts gebannt" if hp else "Kanal fehlt – /panels oder /setup"),
+                inline=True)
+    e.add_field(name=f"{on} Rollen-Schutz", value="Owner-/Admin-Rolle vergibt nur der Owner", inline=True)
+    e.add_field(name="📋 Zahlen", value=f"Warns gesamt: **{warns}** (3 → Timeout, 5 → Bann)\nBlacklist: **{bl}**", inline=True)
+
+    need = {"Administrator": p.administrator, "Audit-Log sehen": p.view_audit_log, "Bannen": p.ban_members,
+            "Kicken": p.kick_members, "Timeout": p.moderate_members, "Rollen verwalten": p.manage_roles,
+            "Kanäle verwalten": p.manage_channels, "Nachrichten verwalten": p.manage_messages}
+    perms = "\n".join(f"{on if v or p.administrator else off} {k}" for k, v in need.items())
+    e.add_field(name="🔑 Bot-Rechte", value=perms, inline=True)
+    e.add_field(name=f"{on if top_ok else off} Bot-Rolle",
+                value="ganz oben ✅" if top_ok else "⚠️ **Nicht ganz oben!** Ziehe die Bot-Rolle in den "
+                                                   "Servereinstellungen nach oben, sonst greift der Schutz nicht.", inline=True)
+    logs = "\n".join(f"{on if find_channel(guild, k) else off} #{k}" for k in
+                     ("mod-logs", "admin-logs", "ticket-logs", "join-leave-logs"))
+    e.add_field(name="📜 Log-Kanäle", value=logs, inline=True)
+    await interaction.response.send_message(embed=e, ephemeral=True)
+
+
+@bot.tree.command(name="hilfe", description="Alle Befehle von VOLT ADMIN")
+@app_commands.guild_only()
+async def help_cmd(interaction: discord.Interaction):
+    user = interaction.user
+    team = isinstance(user, discord.Member) and has_team_role(user)
+    owner = user.id == OWNER_ID
+    e = emb("📖 Befehle", "Alles, was du mit VOLT ADMIN machen kannst.")
+    e.add_field(name="Für alle", inline=False, value=(
+        "`/projekt` – Status deiner Projekte\n`/bewerten` – fertiges Projekt bewerten\n"
+        "`/dm-benachrichtigungen` – DMs bei Ticket-Antworten an/aus\n`/spenden` – freiwillig unterstützen\n"
+        "`/hilfe` – diese Übersicht"))
+    if team:
+        e.add_field(name="Team", inline=False, value=(
+            "`/warn` `/warns` `/clearwarns` – Verwarnungen\n`/timeout` `/kick` `/ban` `/unban` – Moderation\n"
+            "`/benachrichtigen` – User per DM benachrichtigen\n`/security-status` – Schutzsysteme prüfen"))
+    if owner:
+        e.add_field(name="Owner", inline=False, value=(
+            "`/platz 1|2|frei` – Ticket auf die Werkbank (startet die Zeit)\n"
+            "`/zeit pause|weiter|anzeigen` – Arbeitszeit steuern\n"
+            "`/bewertung-anfragen` – um Bewertung bitten\n"
+            "`/bewertungen-liste` `/bewertung-loeschen` – Bewertungen verwalten\n"
+            "Rechtsklick auf Bewertung → Apps → **Bewertung löschen**\n"
+            "`/blacklist add|remove|list` – Ticket-Sperre\n`/panels` – Panels neu posten\n"
+            "`/setup` – Server komplett neu aufbauen (löscht alles!)"))
+    await interaction.response.send_message(embed=e, ephemeral=True)
 
 
 # ===============================================================
@@ -1502,6 +1958,7 @@ class ConfirmWipe(discord.ui.View):
 
 @bot.tree.command(name="setup", description="LÖSCHT alle Channels & Rollen und baut den Server neu auf (nur Owner)")
 @app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
 @owner_check()
 async def setup_cmd(interaction: discord.Interaction):
     await interaction.response.send_message(
@@ -1660,17 +2117,6 @@ async def on_message(message: discord.Message):
         await log(message.guild, "mod-logs", emb("🚫 Anti-Spam", f"{member.mention} · 10 Min Timeout", 0xE67E22))
 
 
-@bot.event
-async def on_message_delete(message: discord.Message):
-    if message.guild and not message.author.bot and message.content:
-        cat = message.channel.category
-        if cat and any(k in cat.name for k in TICKET_CATEGORY_KEYS):
-            return
-        await log(message.guild, "mod-logs", emb(
-            "🗑️ Nachricht gelöscht",
-            f"{message.author.mention} in {message.channel.mention}\n{message.content[:900]}", 0x95A5A6))
-
-
 async def check_nuke(guild: discord.Guild, action: discord.AuditLogAction, label: str):
     try:
         async for entry in guild.audit_logs(limit=1, action=action):
@@ -1735,6 +2181,569 @@ async def on_member_update(before: discord.Member, after: discord.Member):
                 return
     except discord.HTTPException:
         pass
+
+
+# ===============================================================
+# MOD-LOG VON A BIS Z
+# Alles, was User oder Team ändern, landet in #mod-logs: Nachrichten
+# (vorher/nachher), Namen, Avatare, Rollen, Voice, Kanäle, Rollen,
+# Bans, Kicks, Invites, Threads, Emojis, Server, Webhooks, Reaktionen …
+# ===============================================================
+C_EDIT, C_DEL, C_NEW, C_UPD, C_VOICE, C_MEMBER = 0x3498DB, 0xE74C3C, 0x2ECC71, 0xE67E22, 0x9B59B6, 0x1ABC9C
+
+
+def _cut(text, n: int = 1000) -> str:
+    text = "" if text is None else str(text)
+    return text if len(text) <= n else text[:n - 1] + "…"
+
+
+def _who(u) -> str:
+    if u is None:
+        return "unbekannt"
+    return f"{u.mention} · `{u}` · ID {u.id}"
+
+
+def _is_log_channel(ch) -> bool:
+    return ch is not None and "-logs" in (getattr(ch, "name", "") or "")
+
+
+def _ts(d) -> str:
+    return discord.utils.format_dt(d, "f") if d else "–"
+
+
+async def audit_actor(guild: discord.Guild, action: discord.AuditLogAction, target_id: int = None, within: int = 20):
+    """Wer hat es gemacht? Sucht den passenden, frischen Audit-Log-Eintrag."""
+    try:
+        async for entry in guild.audit_logs(limit=8, action=action):
+            if (discord.utils.utcnow() - entry.created_at).total_seconds() > within:
+                break
+            if target_id is None or getattr(entry.target, "id", None) == target_id:
+                return entry.user, entry.reason
+    except discord.HTTPException:
+        pass
+    return None, None
+
+
+async def modlog(guild: discord.Guild, title: str, desc: str = "", color: int = C_UPD,
+                 fields=(), actor=None, reason=None, thumb: str = None):
+    if guild is None:
+        return
+    e = discord.Embed(title=title, description=_cut(desc, 4000), color=color, timestamp=discord.utils.utcnow())
+    for name, value, inline in fields:
+        e.add_field(name=name, value=_cut(value or "–", 1024), inline=inline)
+    if actor is not None:
+        e.add_field(name="Durch", value=_who(actor) + (" 🤖" if actor.bot else ""), inline=False)
+    if reason:
+        e.add_field(name="Grund", value=_cut(reason, 1024), inline=False)
+    if thumb:
+        e.set_thumbnail(url=thumb)
+    e.set_footer(text=f"{BRAND} • Mod-Log")
+    await log(guild, "mod-logs", e)
+
+
+PERM_DE = {
+    "read_messages": "Kanal sehen", "view_channel": "Kanal sehen", "send_messages": "Nachrichten senden",
+    "read_message_history": "Verlauf lesen", "manage_messages": "Nachrichten verwalten", "embed_links": "Links einbetten",
+    "attach_files": "Dateien anhängen", "add_reactions": "Reaktionen", "mention_everyone": "@everyone erwähnen",
+    "manage_channels": "Kanäle verwalten", "manage_roles": "Rollen verwalten", "manage_guild": "Server verwalten",
+    "administrator": "Administrator", "ban_members": "Bannen", "kick_members": "Kicken",
+    "moderate_members": "Timeout", "view_audit_log": "Audit-Log sehen", "manage_webhooks": "Webhooks verwalten",
+    "create_instant_invite": "Einladungen erstellen", "connect": "Voice beitreten", "speak": "Sprechen",
+    "mute_members": "Stummschalten", "deafen_members": "Taub schalten", "move_members": "Verschieben",
+    "manage_nicknames": "Nicknames verwalten", "change_nickname": "Nickname ändern",
+    "manage_threads": "Threads verwalten", "use_application_commands": "Befehle nutzen",
+}
+
+
+def _pname(n: str) -> str:
+    return PERM_DE.get(n, n.replace("_", " "))
+
+
+def _perm_diff(before: discord.Permissions, after: discord.Permissions) -> str:
+    added = [n for n, v in after if v and not getattr(before, n)]
+    removed = [n for n, v in after if not v and getattr(before, n)]
+    out = []
+    if added:
+        out.append("➕ " + ", ".join(_pname(a) for a in added))
+    if removed:
+        out.append("➖ " + ", ".join(_pname(r) for r in removed))
+    return "\n".join(out)
+
+
+def _overwrite_diff(before: dict, after: dict) -> str:
+    def label(t):
+        return f"@{t.name}" if isinstance(t, discord.Role) else str(t)
+    lines = []
+    for t in set(before) | set(after):
+        b, a = before.get(t), after.get(t)
+        if b == a:
+            continue
+        if b is None:
+            lines.append(f"➕ Rechte für {label(t)} angelegt")
+        elif a is None:
+            lines.append(f"➖ Rechte für {label(t)} entfernt")
+        ch = []
+        bd, ad = dict(b or discord.PermissionOverwrite()), dict(a or discord.PermissionOverwrite())
+        for k, v in ad.items():
+            if bd.get(k) != v:
+                sym = {True: "✅", False: "❌", None: "➖"}
+                ch.append(f"{_pname(k)} {sym[bd.get(k)]}→{sym[v]}")
+        if ch:
+            lines.append(f"{label(t)}: " + ", ".join(ch))
+    return "\n".join(lines)
+
+
+# ---- Nachrichten --------------------------------------------------
+@bot.event
+async def on_raw_message_edit(payload: discord.RawMessageUpdateEvent):
+    if not payload.guild_id:
+        return
+    guild = bot.get_guild(payload.guild_id)
+    if guild is None:
+        return
+    after = getattr(payload, "message", None)
+    before = payload.cached_message
+    author = after.author if after else (before.author if before else None)
+    if author is None or author.bot:
+        return
+    channel = guild.get_channel_or_thread(payload.channel_id)
+    if _is_log_channel(channel):
+        return
+    new = after.content if after else payload.data.get("content")
+    old = before.content if before else None
+    if new is None or (before is not None and old == new):
+        return  # nur Embed/Vorschau aktualisiert, kein echter Edit
+    link = f"https://discord.com/channels/{guild.id}/{payload.channel_id}/{payload.message_id}"
+    await modlog(guild, "✏️ Nachricht bearbeitet", f"{author.mention} in <#{payload.channel_id}> · [Zur Nachricht]({link})",
+                 C_EDIT, [("Vorher", old if before else "*nicht bekannt – Nachricht ist älter als der letzte Bot-Neustart*", False),
+                          ("Nachher", new or "*leer*", False),
+                          ("User", _who(author), False)], thumb=author.display_avatar.url)
+
+
+@bot.event
+async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
+    if not payload.guild_id:
+        return
+    guild = bot.get_guild(payload.guild_id)
+    channel = guild.get_channel_or_thread(payload.channel_id) if guild else None
+    if guild is None or _is_log_channel(channel):
+        return
+    msg = payload.cached_message
+    if msg and msg.author.bot:
+        return
+    if msg is None:
+        return await modlog(guild, "🗑️ Nachricht gelöscht", f"In <#{payload.channel_id}>", C_DEL,
+                            [("Inhalt", "*nicht bekannt – Nachricht ist älter als der letzte Bot-Neustart*", False),
+                             ("Nachrichten-ID", str(payload.message_id), False)])
+    actor, _ = await audit_actor(guild, discord.AuditLogAction.message_delete, msg.author.id, within=10)
+    files = "\n".join(f"📎 {a.filename} ({round(a.size / 1024)} KB)" for a in msg.attachments)
+    fields = [("Inhalt", msg.content or "*kein Text*", False)]
+    if files:
+        fields.append(("Anhänge", files, False))
+    if msg.stickers:
+        fields.append(("Sticker", ", ".join(s.name for s in msg.stickers), False))
+    fields += [("Geschrieben am", _ts(msg.created_at), True), ("User", _who(msg.author), False)]
+    await modlog(guild, "🗑️ Nachricht gelöscht", f"Von {msg.author.mention} in {msg.channel.mention}", C_DEL,
+                 fields, actor=actor if actor and actor.id != msg.author.id else None, thumb=msg.author.display_avatar.url)
+
+
+@bot.event
+async def on_raw_bulk_message_delete(payload: discord.RawBulkMessageDeleteEvent):
+    guild = bot.get_guild(payload.guild_id) if payload.guild_id else None
+    channel = guild.get_channel_or_thread(payload.channel_id) if guild else None
+    if guild is None or _is_log_channel(channel):
+        return
+    actor, _ = await audit_actor(guild, discord.AuditLogAction.message_bulk_delete, within=15)
+    lines = [f"**{m.author}**: {_cut(m.content or '[Anhang/Embed]', 150)}"
+             for m in sorted(payload.cached_messages, key=lambda m: m.created_at) if not m.author.bot]
+    await modlog(guild, f"🧹 {len(payload.message_ids)} Nachrichten auf einmal gelöscht", f"In <#{payload.channel_id}>",
+                 C_DEL, [("Bekannte Inhalte", "\n".join(lines[-25:]) or "*keine im Speicher*", False)], actor=actor)
+
+
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent):
+    await _log_reaction(payload, "➕ Reaktion hinzugefügt", C_NEW)
+
+
+@bot.event
+async def on_raw_reaction_remove(payload: discord.RawReactionActionEvent):
+    await _log_reaction(payload, "➖ Reaktion entfernt", C_DEL)
+
+
+async def _log_reaction(payload, title, color):
+    if not payload.guild_id:
+        return
+    guild = bot.get_guild(payload.guild_id)
+    channel = guild.get_channel_or_thread(payload.channel_id) if guild else None
+    user = guild.get_member(payload.user_id) if guild else None
+    if guild is None or _is_log_channel(channel) or (user and user.bot):
+        return
+    link = f"https://discord.com/channels/{guild.id}/{payload.channel_id}/{payload.message_id}"
+    who = user.mention if user else f"<@{payload.user_id}>"
+    await modlog(guild, title, f"{payload.emoji} von {who} in <#{payload.channel_id}> · [Zur Nachricht]({link})", color)
+
+
+@bot.event
+async def on_guild_channel_pins_update(channel, last_pin):
+    if _is_log_channel(channel):
+        return
+    actor, _ = await audit_actor(channel.guild, discord.AuditLogAction.message_pin, within=10)
+    if actor is None:
+        actor, _ = await audit_actor(channel.guild, discord.AuditLogAction.message_unpin, within=10)
+    await modlog(channel.guild, "📌 Angepinnte Nachrichten geändert", f"In {channel.mention}", C_UPD, actor=actor)
+
+
+# ---- Mitglieder ---------------------------------------------------
+@bot.listen("on_member_join")
+async def ml_member_join(member: discord.Member):
+    age = (discord.utils.utcnow() - member.created_at).days
+    actor = None
+    if member.bot:
+        actor, _ = await audit_actor(member.guild, discord.AuditLogAction.bot_add, member.id)
+    await modlog(member.guild, "🤖 Bot hinzugefügt" if member.bot else "📥 Mitglied beigetreten",
+                 _who(member), C_NEW,
+                 [("Account erstellt", f"{_ts(member.created_at)} · {age} Tage alt" + (" ⚠️ sehr neu" if age < 7 else ""), False),
+                  ("Mitglieder jetzt", str(member.guild.member_count), True)],
+                 actor=actor, thumb=member.display_avatar.url)
+
+
+@bot.listen("on_raw_member_remove")
+async def ml_member_remove(payload: discord.RawMemberRemoveEvent):
+    guild = bot.get_guild(payload.guild_id)
+    user = payload.user
+    if guild is None:
+        return
+    actor, reason = await audit_actor(guild, discord.AuditLogAction.kick, user.id, within=15)
+    roles = ""
+    if isinstance(user, discord.Member):
+        roles = ", ".join(r.mention for r in user.roles if not r.is_default())
+    fields = [("Rollen", roles or "–", False)]
+    if isinstance(user, discord.Member) and user.joined_at:
+        fields.append(("War dabei seit", _ts(user.joined_at), True))
+    if actor:
+        await modlog(guild, "👢 Mitglied gekickt", _who(user), C_DEL, fields, actor=actor, reason=reason,
+                     thumb=user.display_avatar.url)
+    else:
+        await modlog(guild, "📤 Mitglied hat den Server verlassen", _who(user), C_DEL, fields, thumb=user.display_avatar.url)
+
+
+@bot.listen("on_member_update")
+async def ml_member_update(before: discord.Member, after: discord.Member):
+    g = after.guild
+    if before.nick != after.nick:
+        actor, _ = await audit_actor(g, discord.AuditLogAction.member_update, after.id)
+        await modlog(g, "🏷️ Server-Nickname geändert", _who(after), C_MEMBER,
+                     [("Vorher", before.nick or f"*kein Nickname* ({before.name})", True),
+                      ("Nachher", after.nick or f"*kein Nickname* ({after.name})", True)],
+                     actor=actor if actor and actor.id != after.id else None, thumb=after.display_avatar.url)
+    added = [r for r in after.roles if r not in before.roles]
+    removed = [r for r in before.roles if r not in after.roles]
+    if added or removed:
+        actor, reason = await audit_actor(g, discord.AuditLogAction.member_role_update, after.id)
+        f = []
+        if added:
+            f.append(("➕ Rolle bekommen", ", ".join(r.mention for r in added), False))
+        if removed:
+            f.append(("➖ Rolle entfernt", ", ".join(r.mention for r in removed), False))
+        await modlog(g, "🎭 Rollen geändert", _who(after), C_MEMBER, f, actor=actor, reason=reason)
+    if before.timed_out_until != after.timed_out_until:
+        actor, reason = await audit_actor(g, discord.AuditLogAction.member_update, after.id)
+        if after.timed_out_until and after.timed_out_until > discord.utils.utcnow():
+            await modlog(g, "⏳ Timeout vergeben", _who(after), C_DEL,
+                         [("Bis", _ts(after.timed_out_until), False)], actor=actor, reason=reason)
+        else:
+            await modlog(g, "✅ Timeout aufgehoben", _who(after), C_NEW, actor=actor, reason=reason)
+    if before.guild_avatar != after.guild_avatar:
+        await modlog(g, "🖼️ Server-Profilbild geändert", _who(after), C_MEMBER,
+                     [("Vorher", before.guild_avatar.url if before.guild_avatar else "*keins*", False),
+                      ("Nachher", after.guild_avatar.url if after.guild_avatar else "*keins*", False)],
+                     thumb=after.guild_avatar.url if after.guild_avatar else None)
+    if before.pending and not after.pending:
+        await modlog(g, "📋 Regeln im Onboarding akzeptiert", _who(after), C_NEW)
+
+
+@bot.event
+async def on_user_update(before: discord.User, after: discord.User):
+    changes = []
+    if before.name != after.name:
+        changes.append(("Username", f"`{before.name}` → `{after.name}`", False))
+    if before.global_name != after.global_name:
+        changes.append(("Anzeigename", f"{before.global_name or '–'} → {after.global_name or '–'}", False))
+    if before.avatar != after.avatar:
+        changes.append(("Profilbild", f"[Vorher]({before.display_avatar.url}) → [Nachher]({after.display_avatar.url})", False))
+    if before.banner != getattr(after, "banner", None) and getattr(before, "banner", None) is not None:
+        changes.append(("Banner", "geändert", False))
+    if not changes:
+        return
+    for g in bot.guilds:
+        if g.get_member(after.id):
+            await modlog(g, "👤 Profil geändert", _who(after), C_MEMBER, changes, thumb=after.display_avatar.url)
+
+
+@bot.event
+async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    g = member.guild
+    if before.channel != after.channel:
+        if before.channel is None:
+            return await modlog(g, "🔊 Voice betreten", f"{member.mention} → {after.channel.mention}", C_VOICE)
+        if after.channel is None:
+            actor, _ = await audit_actor(g, discord.AuditLogAction.member_disconnect, within=10)
+            return await modlog(g, "🔇 Voice verlassen", f"{member.mention} ← {before.channel.mention}", C_VOICE,
+                                actor=actor if actor and actor.id != member.id else None)
+        actor, _ = await audit_actor(g, discord.AuditLogAction.member_move, within=10)
+        return await modlog(g, "🔀 Voice gewechselt", f"{member.mention}: {before.channel.mention} → {after.channel.mention}",
+                            C_VOICE, actor=actor if actor and actor.id != member.id else None)
+    states = []
+    for attr, on_txt, off_txt in (("mute", "vom Team stummgeschaltet", "Stummschaltung (Team) aufgehoben"),
+                                  ("deaf", "vom Team taub geschaltet", "Taubschaltung (Team) aufgehoben"),
+                                  ("self_mute", "Mikro aus", "Mikro an"), ("self_deaf", "Ton aus", "Ton an"),
+                                  ("self_stream", "Bildschirm wird übertragen", "Übertragung beendet"),
+                                  ("self_video", "Kamera an", "Kamera aus")):
+        b, a = getattr(before, attr), getattr(after, attr)
+        if b != a:
+            states.append(on_txt if a else off_txt)
+    if states and after.channel:
+        actor = None
+        if before.mute != after.mute or before.deaf != after.deaf:
+            actor, _ = await audit_actor(g, discord.AuditLogAction.member_update, member.id)
+        await modlog(g, "🎙️ Voice-Status", f"{member.mention} in {after.channel.mention}\n" + "\n".join(f"• {s}" for s in states),
+                     C_VOICE, actor=actor)
+
+
+@bot.listen("on_member_ban")
+async def ml_ban(guild: discord.Guild, user):
+    actor, reason = await audit_actor(guild, discord.AuditLogAction.ban, user.id)
+    await modlog(guild, "🔨 Gebannt", _who(user), C_DEL, actor=actor, reason=reason, thumb=user.display_avatar.url)
+
+
+@bot.event
+async def on_member_unban(guild: discord.Guild, user):
+    actor, reason = await audit_actor(guild, discord.AuditLogAction.unban, user.id)
+    await modlog(guild, "♻️ Entbannt", _who(user), C_NEW, actor=actor, reason=reason)
+
+
+# ---- Kanäle, Threads, Rollen -------------------------------------
+@bot.event
+async def on_guild_channel_create(channel):
+    actor, _ = await audit_actor(channel.guild, discord.AuditLogAction.channel_create, channel.id)
+    await modlog(channel.guild, "📁 Kanal erstellt", f"{channel.mention} · `{channel.name}`", C_NEW,
+                 [("Typ", str(channel.type), True), ("Kategorie", channel.category.name if channel.category else "–", True)],
+                 actor=actor)
+
+
+@bot.listen("on_guild_channel_delete")
+async def ml_channel_delete(channel):
+    actor, _ = await audit_actor(channel.guild, discord.AuditLogAction.channel_delete, channel.id)
+    await modlog(channel.guild, "🗑️ Kanal gelöscht", f"`{channel.name}`", C_DEL,
+                 [("Typ", str(channel.type), True), ("Kategorie", channel.category.name if channel.category else "–", True)],
+                 actor=actor)
+
+
+@bot.event
+async def on_guild_channel_update(before, after):
+    if _is_log_channel(after) and before.name == after.name:
+        return
+    f = []
+    if before.name != after.name:
+        f.append(("Name", f"`{before.name}` → `{after.name}`", False))
+    if getattr(before, "topic", None) != getattr(after, "topic", None):
+        f.append(("Thema vorher", before.topic or "–", False))
+        f.append(("Thema nachher", after.topic or "–", False))
+    if before.category != after.category:
+        f.append(("Kategorie", f"{before.category.name if before.category else '–'} → {after.category.name if after.category else '–'}", False))
+    for attr, label in (("slowmode_delay", "Slowmode (s)"), ("nsfw", "NSFW"), ("bitrate", "Bitrate"),
+                        ("user_limit", "User-Limit")):
+        if getattr(before, attr, None) != getattr(after, attr, None):
+            f.append((label, f"{getattr(before, attr, None)} → {getattr(after, attr, None)}", True))
+    ow = _overwrite_diff(before.overwrites, after.overwrites)
+    if ow:
+        f.append(("Rechte", ow, False))
+    if not f:
+        return
+    actor, _ = await audit_actor(after.guild, discord.AuditLogAction.channel_update, after.id)
+    if actor is None and ow:
+        for act in (discord.AuditLogAction.overwrite_update, discord.AuditLogAction.overwrite_create,
+                    discord.AuditLogAction.overwrite_delete):
+            actor, _ = await audit_actor(after.guild, act, after.id)
+            if actor:
+                break
+    if actor and actor.id == bot.user.id:
+        return  # eigene Ticket-Umbenennungen stehen schon in #ticket-logs
+    await modlog(after.guild, "🛠️ Kanal geändert", after.mention, C_UPD, f, actor=actor)
+
+
+@bot.event
+async def on_thread_create(thread: discord.Thread):
+    await modlog(thread.guild, "🧵 Thread erstellt", f"{thread.mention} in {thread.parent.mention if thread.parent else '–'}",
+                 C_NEW, [("Erstellt von", _who(thread.owner) if thread.owner else f"<@{thread.owner_id}>", False)])
+
+
+@bot.event
+async def on_thread_delete(thread: discord.Thread):
+    actor, _ = await audit_actor(thread.guild, discord.AuditLogAction.thread_delete, thread.id)
+    await modlog(thread.guild, "🧵 Thread gelöscht", f"`{thread.name}`", C_DEL, actor=actor)
+
+
+@bot.event
+async def on_thread_update(before: discord.Thread, after: discord.Thread):
+    f = []
+    if before.name != after.name:
+        f.append(("Name", f"`{before.name}` → `{after.name}`", False))
+    if before.archived != after.archived:
+        f.append(("Archiviert", "ja" if after.archived else "nein", True))
+    if before.locked != after.locked:
+        f.append(("Gesperrt", "ja" if after.locked else "nein", True))
+    if f:
+        await modlog(after.guild, "🧵 Thread geändert", after.mention, C_UPD, f)
+
+
+@bot.event
+async def on_guild_role_create(role: discord.Role):
+    actor, _ = await audit_actor(role.guild, discord.AuditLogAction.role_create, role.id)
+    await modlog(role.guild, "🎭 Rolle erstellt", f"{role.mention} · `{role.name}`", C_NEW, actor=actor)
+
+
+@bot.listen("on_guild_role_delete")
+async def ml_role_delete(role: discord.Role):
+    actor, _ = await audit_actor(role.guild, discord.AuditLogAction.role_delete, role.id)
+    await modlog(role.guild, "🗑️ Rolle gelöscht", f"`{role.name}`", C_DEL, actor=actor)
+
+
+@bot.event
+async def on_guild_role_update(before: discord.Role, after: discord.Role):
+    f = []
+    if before.name != after.name:
+        f.append(("Name", f"`{before.name}` → `{after.name}`", False))
+    if before.color != after.color:
+        f.append(("Farbe", f"{before.color} → {after.color}", True))
+    if before.hoist != after.hoist:
+        f.append(("Getrennt anzeigen", "ja" if after.hoist else "nein", True))
+    if before.mentionable != after.mentionable:
+        f.append(("Erwähnbar", "ja" if after.mentionable else "nein", True))
+    perms = _perm_diff(before.permissions, after.permissions)
+    if perms:
+        f.append(("Berechtigungen", perms, False))
+    if not f:
+        return  # nur Position verschoben
+    actor, _ = await audit_actor(after.guild, discord.AuditLogAction.role_update, after.id)
+    await modlog(after.guild, "🎭 Rolle geändert", after.mention, C_UPD, f, actor=actor)
+
+
+# ---- Server, Invites, Emojis, Webhooks, Events, AutoMod -----------
+@bot.event
+async def on_guild_update(before: discord.Guild, after: discord.Guild):
+    f = []
+    for attr, label in (("name", "Name"), ("description", "Beschreibung"), ("verification_level", "Verifizierungsstufe"),
+                        ("explicit_content_filter", "Inhaltsfilter"), ("default_notifications", "Benachrichtigungen"),
+                        ("mfa_level", "2FA für Moderation"), ("afk_channel", "AFK-Kanal"), ("afk_timeout", "AFK-Zeit"),
+                        ("system_channel", "Systemkanal"), ("rules_channel", "Regelkanal"), ("owner_id", "Owner-ID"),
+                        ("preferred_locale", "Sprache")):
+        b, a = getattr(before, attr, None), getattr(after, attr, None)
+        if b != a:
+            f.append((label, f"{b} → {a}", False))
+    for attr, label in (("icon", "Server-Icon"), ("banner", "Server-Banner"), ("splash", "Einladungs-Hintergrund")):
+        if getattr(before, attr, None) != getattr(after, attr, None):
+            f.append((label, "geändert", True))
+    if not f:
+        return
+    actor, _ = await audit_actor(after, discord.AuditLogAction.guild_update)
+    await modlog(after, "⚙️ Server-Einstellungen geändert", "", C_UPD, f, actor=actor,
+                 thumb=after.icon.url if after.icon else None)
+
+
+@bot.event
+async def on_invite_create(invite: discord.Invite):
+    if invite.guild is None:
+        return
+    g = bot.get_guild(invite.guild.id)
+    await modlog(g, "🔗 Einladung erstellt", f"`discord.gg/{invite.code}`", C_NEW,
+                 [("Kanal", invite.channel.mention if invite.channel else "–", True),
+                  ("Max. Nutzungen", str(invite.max_uses or "∞"), True),
+                  ("Gültig", f"{invite.max_age // 3600} Std" if invite.max_age else "dauerhaft", True),
+                  ("Temporär", "ja" if invite.temporary else "nein", True)],
+                 actor=invite.inviter)
+
+
+@bot.event
+async def on_invite_delete(invite: discord.Invite):
+    if invite.guild is None:
+        return
+    g = bot.get_guild(invite.guild.id)
+    actor, _ = await audit_actor(g, discord.AuditLogAction.invite_delete)
+    await modlog(g, "🔗 Einladung gelöscht", f"`discord.gg/{invite.code}`", C_DEL, actor=actor)
+
+
+@bot.event
+async def on_guild_emojis_update(guild: discord.Guild, before, after):
+    b, a = {e.id: e for e in before}, {e.id: e for e in after}
+    f = []
+    for i in a.keys() - b.keys():
+        f.append(("➕ Emoji hinzugefügt", f"{a[i]} `:{a[i].name}:`", True))
+    for i in b.keys() - a.keys():
+        f.append(("➖ Emoji entfernt", f"`:{b[i].name}:`", True))
+    for i in a.keys() & b.keys():
+        if a[i].name != b[i].name:
+            f.append(("✏️ Emoji umbenannt", f"`:{b[i].name}:` → `:{a[i].name}:`", True))
+    if f:
+        await modlog(guild, "😀 Emojis geändert", "", C_UPD, f)
+
+
+@bot.event
+async def on_guild_stickers_update(guild: discord.Guild, before, after):
+    b, a = {s.id: s.name for s in before}, {s.id: s.name for s in after}
+    f = [("➕ Sticker hinzugefügt", a[i], True) for i in a.keys() - b.keys()]
+    f += [("➖ Sticker entfernt", b[i], True) for i in b.keys() - a.keys()]
+    f += [("✏️ Sticker umbenannt", f"{b[i]} → {a[i]}", True) for i in a.keys() & b.keys() if a[i] != b[i]]
+    if f:
+        await modlog(guild, "🏷️ Sticker geändert", "", C_UPD, f)
+
+
+@bot.event
+async def on_webhooks_update(channel):
+    actor = None
+    for act in (discord.AuditLogAction.webhook_create, discord.AuditLogAction.webhook_update,
+                discord.AuditLogAction.webhook_delete):
+        actor, _ = await audit_actor(channel.guild, act)
+        if actor:
+            break
+    await modlog(channel.guild, "🪝 Webhooks geändert", f"In {channel.mention} · bitte prüfen, falls unbekannt",
+                 C_UPD, actor=actor)
+
+
+@bot.event
+async def on_scheduled_event_create(event: discord.ScheduledEvent):
+    await modlog(event.guild, "📅 Event erstellt", f"**{event.name}**", C_NEW,
+                 [("Start", _ts(event.start_time), True)], actor=event.creator)
+
+
+@bot.event
+async def on_scheduled_event_delete(event: discord.ScheduledEvent):
+    await modlog(event.guild, "📅 Event gelöscht", f"**{event.name}**", C_DEL)
+
+
+@bot.event
+async def on_automod_action(execution: discord.AutoModAction):
+    g = execution.guild
+    member = g.get_member(execution.user_id)
+    await modlog(g, "🤖 AutoMod hat eingegriffen", _who(member) if member else f"<@{execution.user_id}>", C_DEL,
+                 [("Aktion", str(execution.action.type), True), ("Treffer", execution.matched_keyword or "–", True),
+                  ("Inhalt", execution.content or "–", False)])
+
+
+@bot.listen("on_app_command_completion")
+async def ml_command_used(interaction: discord.Interaction, command):
+    if interaction.guild is None:
+        return
+    opts = ""
+    data = interaction.data or {}
+    for o in data.get("options", []) or []:
+        if "value" in o:
+            opts += f" {o['name']}:{_cut(o['value'], 80)}"
+        for sub in o.get("options", []) or []:
+            if "value" in sub:
+                opts += f" {sub['name']}:{_cut(sub['value'], 80)}"
+    await modlog(interaction.guild, "⌨️ Befehl benutzt",
+                 f"`/{command.qualified_name}{opts}` von {interaction.user.mention} in <#{interaction.channel_id}>", C_EDIT)
 
 
 # ===============================================================
@@ -1825,11 +2834,27 @@ async def build_site_stats() -> dict:
     rows = await pool.fetch("SELECT status, count(*) AS n FROM tickets WHERE status<>'deleted' GROUP BY status")
     c = defaultdict(int, {r["status"]: int(r["n"]) for r in rows})
 
-    active = c["progress"]                         # gerade in Arbeit
+    now = time.time()
+    # Werkbank: welche Tickets liegen per /platz auf Platz 1/2, läuft die Uhr?
+    slots = []
+    busy_ids = set()
+    for n in range(1, MAX_PARALLEL + 1):
+        t = await pool.fetchrow(
+            "SELECT id, project_type FROM tickets WHERE slot=$1 AND status NOT IN ('archived','rejected','deleted')", n)
+        if not t:
+            slots.append({"n": n, "busy": False})
+            continue
+        busy_ids.add(t["id"])
+        slots.append({"n": n, "busy": True, "type": (t["project_type"] or "Projekt")[:40],
+                      "running": await timer_running(t["id"]), "seconds": int(await work_seconds(t["id"]))})
+
+    active = len(busy_ids)                          # gerade auf der Werkbank
     running = c["running"] + c["maintenance"]      # live beim Kunden
     new_requests = c["open"]                       # noch nicht bearbeitet
-    queue = max(0, active - MAX_PARALLEL) + new_requests
-    percent = round(min(active, MAX_PARALLEL) / MAX_PARALLEL * 100)
+    accepted = await pool.fetchval(
+        "SELECT count(*) FROM tickets WHERE status IN ('progress','paused') AND slot IS NULL") or 0
+    queue = int(accepted) + new_requests           # bestätigt oder neu, aber noch nicht auf der Werkbank
+    percent = round(active / MAX_PARALLEL * 100)
     if active >= MAX_PARALLEL and queue:
         label = "Warteschlange aktiv"
     elif percent >= 100:
@@ -1838,7 +2863,7 @@ async def build_site_stats() -> dict:
         label = "Gut ausgelastet"
     else:
         label = "Freie Kapazität"
-    backlog = active + new_requests
+    backlog = active + queue
     wait_days = math.ceil(backlog / PROJECTS_PER_DAY) if backlog else 0
 
     b = await pool.fetchrow(
@@ -1846,6 +2871,13 @@ async def build_site_stats() -> dict:
         "WHERE accepted_at IS NOT NULL AND live_at IS NOT NULL")
     samples = int(b["n"] or 0)
     build_days = round(max(float(b["d"]), 0.1), 1) if samples >= 3 and b["d"] is not None else None
+    # Gestoppte Arbeitszeit pro fertigem Projekt (aus /platz + /zeit)
+    w = await pool.fetchrow(
+        "SELECT count(*) AS n, avg(s) AS a FROM (SELECT ws.ticket_id, sum(coalesce(ws.ended_at, $1) - ws.started_at) AS s "
+        "FROM work_sessions ws JOIN tickets t ON t.id = ws.ticket_id "
+        "WHERE t.status IN ('running','maintenance','archived') GROUP BY ws.ticket_id HAVING s > 60)", now)
+    work_samples = int(w["n"] or 0)
+    avg_work = int(w["a"]) if work_samples and w["a"] is not None else None
 
     count, avg, dist = await review_summary()
     latest = []
@@ -1869,8 +2901,9 @@ async def build_site_stats() -> dict:
         "projects": {"running": running, "active": active, "paused": c["paused"],
                      "requests": new_requests, "done": c["archived"]},
         "workload": {"active": active, "capacity": MAX_PARALLEL, "percent": percent, "label": label,
-                     "queue": queue, "wait_days": wait_days, "per_day": PROJECTS_PER_DAY},
-        "build": {"avg_days": build_days, "samples": samples},
+                     "queue": queue, "wait_days": wait_days, "per_day": PROJECTS_PER_DAY, "slots": slots},
+        "build": {"avg_days": build_days, "samples": samples,
+                  "avg_work_seconds": avg_work, "work_samples": work_samples},
         "team": {"people": 1},
         "reviews": {"count": count, "avg": round(avg, 2) if avg is not None else None,
                     "label": rating_label(avg, count), "dist": {str(k): v for k, v in dist.items()},
@@ -1968,6 +3001,11 @@ async def migrate_db():
     for col in ("accepted_at", "live_at"):
         if col not in cols:
             await pool.execute(f"ALTER TABLE tickets ADD COLUMN {col} TEXT")
+    if "slot" not in cols:
+        await pool.execute("ALTER TABLE tickets ADD COLUMN slot INTEGER")
+    rcols = {r[1] for r in await pool.fetch("PRAGMA table_info(reviews)")}
+    if "message_id" not in rcols:
+        await pool.execute("ALTER TABLE reviews ADD COLUMN message_id INTEGER")
 
 
 # ===============================================================
@@ -1985,15 +3023,34 @@ async def setup_hook():
     if GUILD_ID:
         g = discord.Object(id=GUILD_ID)
         bot.tree.copy_global_to(guild=g)
-        await bot.tree.sync(guild=g)
-    else:
+        synced = await bot.tree.sync(guild=g)
+        # Alte globale Befehle (z. B. /security-status vom alten Bot) bei Discord entfernen
+        bot.tree.clear_commands(guild=None)
         await bot.tree.sync()
+        print(f"{len(synced)} Befehle im Server {GUILD_ID} aktiv, alte globale Befehle entfernt.")
+    else:
+        synced = await bot.tree.sync()
+        print(f"{len(synced)} globale Befehle aktiv.")
     update_stats.start()
+
+
+_cleaned_guild_commands = False
 
 
 @bot.event
 async def on_ready():
+    global _cleaned_guild_commands
     print(f"VOLT online als {bot.user} ({bot.user.id})")
+    if not GUILD_ID and not _cleaned_guild_commands:
+        # Ohne GUILD_ID laufen die Befehle global: alte Server-Befehle vom alten Bot entfernen
+        _cleaned_guild_commands = True
+        for g in bot.guilds:
+            try:
+                bot.tree.clear_commands(guild=g)
+                await bot.tree.sync(guild=g)
+            except discord.HTTPException:
+                pass
+        print("Alte Server-Befehle entfernt.")
 
 
 async def main():
