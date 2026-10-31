@@ -35,9 +35,81 @@
   }
 
   /* ---------- Vorschauen: nicht bedienbar, nicht kopierbar ---------- */
-  $$(".preview").forEach(function (p) {
+  $$(".preview, .sv").forEach(function (p) {
     ["contextmenu", "dragstart", "copy", "selectstart"].forEach(function (ev) {
       p.addEventListener(ev, function (e) { e.preventDefault(); });
+    });
+  });
+
+  /* ---------- Eingeschränkte Funktionen: Hinweis statt Aktion ---------- */
+  var INVITE_URL = "https://discord.gg/RpUtNGT6uj";
+  function toast(box, text) {
+    var t = $("[data-toast]", box);
+    if (!t) return;
+    t.textContent = "";
+    var span = document.createElement("span"); span.textContent = text; t.appendChild(span);
+    var a = document.createElement("a");
+    a.href = INVITE_URL; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Discord beitreten";
+    a.setAttribute("data-invite", "");
+    t.appendChild(a);
+    t.hidden = false;
+    clearTimeout(t._h);
+    t._h = setTimeout(function () { t.hidden = true; }, 3200);
+  }
+  $$(".sv, .preview.live").forEach(function (box) {
+    box.addEventListener("click", function (e) {
+      var lock = e.target.closest && e.target.closest("[data-lock]");
+      if (!lock || !box.contains(lock)) return;
+      e.preventDefault();
+      toast(box, "🔒 In der Vorschau gesperrt. Im echten Discord funktioniert alles.");
+    });
+  });
+
+  /* ---------- Systemvorschau: Produkte und Kanäle wechseln ---------- */
+  $$("[data-sv]").forEach(function (sv) {
+    var nameEl = $("[data-sv-name]", sv), inputEl = $("[data-sv-input]", sv), more = $("[data-sv-more]", sv);
+    function showChannel(btn) {
+      if (!btn) return;
+      var list = btn.closest("[data-sv-list]");
+      $$("[data-sv-c]", list).forEach(function (b) { b.classList.toggle("on", b === btn); });
+      var cid = btn.getAttribute("data-sv-c");
+      $$("[data-sv-feed]", sv).forEach(function (f) { f.hidden = f.getAttribute("data-sv-feed") !== cid; });
+      if (nameEl) nameEl.textContent = btn.getAttribute("data-label") || "";
+      if (inputEl) inputEl.textContent = btn.getAttribute("data-input") || "";
+      var feeds = $(".sv-feeds", sv); if (feeds) feeds.scrollTop = 0;
+    }
+    $$("[data-sv-c]", sv).forEach(function (b) {
+      b.addEventListener("click", function () { showChannel(b); });
+    });
+    $$("[data-sv-p]", sv).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var key = b.getAttribute("data-sv-p");
+        $$("[data-sv-p]", sv).forEach(function (x) {
+          var on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        var target = null;
+        $$("[data-sv-list]", sv).forEach(function (l) {
+          var on = l.getAttribute("data-sv-list") === key;
+          l.hidden = !on;
+          if (on) target = $("[data-sv-c].on", l) || $("[data-sv-c]", l);
+        });
+        showChannel(target);
+        if (more) more.setAttribute("href", "/" + key);
+      });
+    });
+  });
+
+  /* ---------- Dashboard-Vorschau: Bereiche wechseln ---------- */
+  $$("[data-dash]").forEach(function (d) {
+    $$("[data-dv]", d).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var id = b.getAttribute("data-dv");
+        $$("[data-dv]", d).forEach(function (x) {
+          var on = x === b; x.classList.toggle("on", on);
+          if (on) x.setAttribute("aria-current", "true"); else x.removeAttribute("aria-current");
+        });
+        $$("[data-dv-panel]", d).forEach(function (p) { p.hidden = p.getAttribute("data-dv-panel") !== id; });
+      });
     });
   });
 
@@ -77,15 +149,16 @@
     discord: { members: 12, online: 4 },
     projects: { running: 3, active: 1, paused: 0, requests: 1, done: 7 },
     workload: { active: 1, capacity: 2, percent: 50, label: "Gut ausgelastet", queue: 1, wait_days: 2, per_day: 1,
-      slots: [{ n: 1, busy: true, type: "📺 Streamer-Bot", running: true, seconds: 5040 }, { n: 2, busy: false }] },
+      slots: [{ n: 1, busy: true, type: "👪 Familien-Dashboard", running: true, seconds: 5040 }, { n: 2, busy: false }] },
+    system: { state: "online", label: "Alle Systeme laufen", note: "", uptime: 99.98, ms: 42, checked: null, since: null, up: 1, total: 1 },
     build: { avg_days: null, samples: 0, avg_work_seconds: 11520, work_samples: 4 },
     team: { people: 1 },
     reviews: {
       count: 5, avg: 4.8, label: "Sehr zufrieden", dist: { "5": 4, "4": 1, "3": 0, "2": 0, "1": 0 },
       latest: [
-        { stars: 5, text: "Live-Alerts laufen seit Tag eins ohne Probleme. Schnelle Antworten im Ticket.", type: "🤖 Discord-Bot", month: "2026-10" },
-        { stars: 5, text: "Server komplett neu aufgebaut, sieht richtig sauber aus.", type: "🖥️ Discord-Server-Setup", month: "2026-09" },
-        { stars: 4, text: "Hat einen Tag länger gedauert als gedacht, Ergebnis passt aber.", type: "📦 Bot + Server (Komplettpaket)", month: "2026-09" }
+        { stars: 5, text: "Dashboard läuft seit Tag eins ohne Probleme. Schnelle Antworten im Ticket.", type: "👪 Familien-Dashboard", month: "2026-10" },
+        { stars: 5, text: "The Stage per Drag & Drop spart uns jeden Abend Zeit.", type: "⚽ Fussball-Manager", month: "2026-09" },
+        { stars: 4, text: "Hat einen Tag länger gedauert als gedacht, Ergebnis passt aber.", type: "🗺️ Routen-System", month: "2026-09" }
       ]
     }
   };
@@ -211,15 +284,56 @@
       setAll("updated", "Beispielwerte, live auf der echten Seite");
     }
 
-    if (typeof d.donate === "string" && /^https:\/\/[^\s"'<>]+$/.test(d.donate)) {
-      $$("a[data-donate]").forEach(function (a) { a.href = d.donate; a.hidden = false; });
-    }
+    renderSystem(d.system);
     if (typeof d.invite === "string" && /^https:\/\/(discord\.gg|discord\.com\/invite)\/[A-Za-z0-9-]+$/.test(d.invite)) {
+      INVITE_URL = d.invite;
       $$("a[data-invite]").forEach(function (a) { a.href = d.invite; });
     }
   }
 
-  var needsStats = $$("[data-s]").length > 0;
+  /* ---------- Systemstatus (/status, /störung, /wartungsmodus + Uptime-Check) ---------- */
+  var SYS_TEXT = { online: "Alle Systeme laufen", wartung: "Wartungsmodus", stoerung: "Störung" };
+  function ago(iso) {
+    var t = Date.parse(iso); if (isNaN(t)) return "–";
+    var s = Math.max(0, Math.round((Date.now() - t) / 1000));
+    if (s < 60) return "vor " + s + " Sek.";
+    if (s < 3600) return "vor " + Math.round(s / 60) + " Min.";
+    return "vor " + Math.round(s / 3600) + " Std.";
+  }
+  function renderSystem(sys) {
+    if (!sys || !sys.state) return;
+    var st = SYS_TEXT[sys.state] ? sys.state : "online";
+    var title = sys.label || SYS_TEXT[st];
+    $$("[data-sys-chip]").forEach(function (el) { el.setAttribute("data-state", st); });
+    $$("[data-sys-label]").forEach(function (el) { el.textContent = title; });
+    var row = $("[data-sysrow]");
+    if (row) {
+      row.setAttribute("data-state", st);
+      $("[data-sys-title]", row).textContent = title;
+      $("[data-sys-note]", row).textContent = sys.note || (st === "online" ? "Website, Bot und Live-Status sind erreichbar." : "");
+      var web = $("[data-sys-web]", row), ms = $("[data-sys-ms]", row), ck = $("[data-sys-checked]", row);
+      if (web) web.textContent = typeof sys.uptime === "number" ? nf(sys.uptime, sys.uptime >= 99.995 ? 0 : 2) + " % erreichbar" : (sys.total ? "geprüft" : "–");
+      if (ms) ms.textContent = typeof sys.ms === "number" ? nf(sys.ms) + " ms" : "–";
+      if (ck) ck.textContent = sys.checked ? ago(sys.checked) : "–";
+    }
+    if (typeof sys.uptime === "number") {
+      setAll("uptime", nf(sys.uptime, sys.uptime >= 99.995 ? 0 : 2) + " %");
+      setAll("uptime-sub", "Website, " + (typeof sys.ms === "number" ? "Antwort in " + nf(sys.ms) + " ms" : "rund um die Uhr geprüft"));
+    } else {
+      setAll("uptime", "–");
+    }
+    var bar = $("[data-sysbar]");
+    if (bar) {
+      if (st === "online") { bar.hidden = true; }
+      else {
+        bar.hidden = false;
+        bar.setAttribute("data-state", st);
+        $("[data-sysbar-text]", bar).textContent = (st === "wartung" ? "Wartungsmodus: Alle Systeme werden aktualisiert." : "Störung: Wir arbeiten daran.") + (sys.note ? " " + sys.note : "");
+      }
+    }
+  }
+
+  var needsStats = $$("[data-s], [data-sysbar]").length > 0;
   function load() {
     fetch("/api/stats", { headers: { "Accept": "application/json" }, cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })

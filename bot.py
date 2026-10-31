@@ -1,7 +1,8 @@
 """
 VOLT - Discord Solutions | All-in-One Bot
-Setup, Verify, Tickets (Status-Workflow + Preisangebot), Sicherheit, Warns,
-Blacklist, Bewertungen, FAQ, Logs + Website (läuft im selben Railway-Service).
+Setup, Verify, Tickets (Produkt-Auswahl + Bestätigung), Sicherheit, Warns,
+Blacklist, Bewertungen, FAQ, Logs, Willkommenskarten, Arbeitsstatus,
+Uptime-Monitor + Website (läuft im selben Railway-Service).
 """
 import os
 import io
@@ -9,10 +10,14 @@ import re
 import math
 import time
 import asyncio
+import json
+import random
 import mimetypes
+import unicodedata
 import datetime as dt
 from collections import defaultdict, deque
 
+import aiohttp
 import aiosqlite
 import discord
 from aiohttp import web
@@ -33,7 +38,7 @@ if VOLUME_PATH:
 else:
     DB_PATH = "volt.db"
     print("WARNUNG: Kein Volume erkannt, Daten gehen bei Neustart verloren!")
-DONATION_URL = os.environ.get("DONATION_URL", "")  # z.B. PayPal.me / Ko-fi Link
+DONATION_URL = os.environ.get("DONATION_URL", "")  # leer lassen: Spenden werden auf Discord geklärt
 
 # Website (Railway setzt PORT automatisch)
 SITE_ENABLED = os.environ.get("SITE_ENABLED", "1") != "0"
@@ -43,6 +48,8 @@ PROJECTS_PER_DAY = max(0.1, float(os.environ.get("PROJECTS_PER_DAY", "1")))  # n
 DISCORD_INVITE_URL = os.environ.get("DISCORD_INVITE_URL", "https://discord.gg/RpUtNGT6uj")
 SITE_URL = os.environ.get("SITE_URL", "https://voltstudio.work").rstrip("/")
 SITE_LABEL = "VoltStudio.work"
+SITE_HOST = SITE_URL.split("://", 1)[-1].split("/", 1)[0]
+MONITOR_INTERVAL = max(30, int(os.environ.get("MONITOR_INTERVAL", "60")))  # Sekunden zwischen zwei Uptime-Checks
 
 MIN_ACCOUNT_AGE_DAYS = int(os.environ.get("MIN_ACCOUNT_AGE_DAYS", "3"))  # 0 = aus
 RAID_JOINS = int(os.environ.get("RAID_JOINS", "6"))      # so viele Joins ...
@@ -54,7 +61,8 @@ MAX_OPEN_TICKETS = 2
 SUPPORT_SEES_TICKETS = False
 
 BRAND = "VOLT • Discord Solutions • VoltStudio.work"
-BRAND_COLOR = 0xF1C40F
+BRAND_COLOR = 0xFF1F2A   # VOLT-Rot
+C_ONLINE, C_WARTUNG, C_STOERUNG = 0x23A55A, 0xFF9F1A, 0xFF1F2A
 
 intents = discord.Intents.default()
 intents.members = True
@@ -184,13 +192,14 @@ STRUCTURE = [
     ("━━━━━ 📌 INFOS ━━━━━", "verified", [
         ("📢│ankündigungen", "text"),
         ("🟢│server-status", "text"),
+        ("📡│uptime", "text"),
+        ("🌐│website", "text"),
         ("⭐│bewertungen", "text"),
-        ("💳│kosten-übersicht", "text"),
         ("❓│faq", "text"),
         ("🎨│portfolio", "text"),
     ]),
     ("━━━━━ 🛒 SHOP ━━━━━", "verified", [
-        ("💰│preisliste", "text"),
+        ("🛍️│produkte", "text"),
         ("🛒│bestellen", "text"),
     ]),
     ("━━━━━ 🟡 OFFENE TICKETS ━━━━━", "ticket", []),
@@ -242,16 +251,58 @@ async def log(guild: discord.Guild, key: str, embed: discord.Embed, file=None):
             pass
 
 
+# ===============================================================
+# PRODUKTE (Discord-Panels, Bestellung und Website nutzen dieselbe Liste)
+# ===============================================================
+PRODUCTS = [
+    {"key": "familien-dashboard", "emoji": "👪", "name": "Familien-Dashboard", "tag": "All-in-One",
+     "label": "👪 Familien-Dashboard (All-in-One)",
+     "short": "Mitglieder, Termine, Kasse, Lager und Sanktionen in einem Dashboard, mit eigenem Discord-Bot.",
+     "points": ["14 Systeme in einem Dashboard, 61 Bot-Befehle",
+                "Termine & Aufstellung mit Komme · Später · Komme nicht",
+                "Kasse, Wochenabgaben und Lager mit Leihgabe",
+                "Sanktionen mit Erinnerung per DM, eigene Log-Channels"],
+     "demo": "Vorschau, Sneak Peek und klickbare Demo"},
+    {"key": "fussball-manager", "emoji": "⚽", "name": "Fussball-Manager", "tag": "Dashboard + Bot",
+     "label": "⚽ Fussball-Manager",
+     "short": "Spiele planen, Zusagen über Discord, The Stage per Drag & Drop und Ergebnisse mit Bildbeweis.",
+     "points": ["Login nur per Discord, Zugriff nur für eure Rollen",
+                "Spiele mit max. 25 Teilnehmern, Zusagen per Button",
+                "The Stage (Main & Classic) per Drag & Drop",
+                "Felder-Übersicht und Ergebnisse mit Bildbeweis"],
+     "demo": "Vorschau zum Durchklicken"},
+    {"key": "routen-system", "emoji": "🗺️", "name": "Routen-System", "tag": "Bot + Dashboard",
+     "label": "🗺️ Routen-System",
+     "short": "Familien, Kontrollen & Wachen, Arbeiter, Sanktionen, Blacklist und Routen-Sync in einem System.",
+     "points": ["Familienrolle per Passwort, mit Kürzel und Ablaufdatum",
+                "Kontrollen & Wachen mit Level und Wochenranking",
+                "Zentraler Sanktionskatalog, Blacklist mit Vorfällen",
+                "Routen-Sync: Kick oder Bann gilt auch auf der Route"],
+     "demo": "Vorschau zum Durchklicken"},
+]
+CUSTOM_REQUEST = "💡 Individuelle Anfrage"
+PROJECT_TYPES = [p["label"] for p in PRODUCTS] + [CUSTOM_REQUEST]
+
+
+def product_url(key: str) -> str:
+    return f"{SITE_URL}/{key}"
+
+
+def product_by_label(label: str):
+    return next((p for p in PRODUCTS if p["label"] == label), None)
+
+
+def channel_url(guild: discord.Guild, ch) -> str:
+    return f"https://discord.com/channels/{guild.id}/{ch.id}" if ch else SITE_URL
+
+
 def volt_link_view() -> discord.ui.View:
-    """Buttons zu Website und Produkten, z. B. für Willkommen-Panel und /volt."""
+    """Buttons zu Website und Produkten, z. B. für /volt und den Website-Kanal."""
     v = discord.ui.View(timeout=None)
     v.add_item(discord.ui.Button(label="Website", emoji="🌐", style=discord.ButtonStyle.link, url=SITE_URL))
-    v.add_item(discord.ui.Button(label="Familien-Dashboard", emoji="👪", style=discord.ButtonStyle.link,
-                                 url=f"{SITE_URL}/familien-dashboard.html"))
-    v.add_item(discord.ui.Button(label="Fussball-Manager", emoji="⚽", style=discord.ButtonStyle.link,
-                                 url=f"{SITE_URL}/fussball-manager.html"))
-    v.add_item(discord.ui.Button(label="Routen-System", emoji="🗺️", style=discord.ButtonStyle.link,
-                                 url=f"{SITE_URL}/routen-system.html"))
+    for p in PRODUCTS:
+        v.add_item(discord.ui.Button(label=p["name"], emoji=p["emoji"], style=discord.ButtonStyle.link,
+                                     url=product_url(p["key"])))
     return v
 
 
@@ -288,6 +339,8 @@ CREATE TABLE IF NOT EXISTS dm_optout (
 CREATE TABLE IF NOT EXISTS work_sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL,
   started_at REAL NOT NULL, ended_at REAL);
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY, value TEXT);
 """
 
 
@@ -333,6 +386,22 @@ class DB:
 
 async def get_ticket(channel_id: int):
     return await pool.fetchrow("SELECT * FROM tickets WHERE channel_id=$1", channel_id)
+
+
+async def get_setting(key: str, default=None):
+    """Einstellungen (Arbeitsstatus, Uptime-Monitor ...) als JSON in der Datenbank."""
+    raw = await pool.fetchval("SELECT value FROM settings WHERE key=$1", key)
+    if raw is None:
+        return default
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return default
+
+
+async def set_setting(key: str, value):
+    await pool.execute("INSERT INTO settings (key, value) VALUES ($1, $2) "
+                       "ON CONFLICT (key) DO UPDATE SET value=excluded.value", key, json.dumps(value))
 
 
 # ===============================================================
@@ -608,10 +677,14 @@ class VerifyView(discord.ui.View):
 # FAQ
 # ===============================================================
 FAQ = {
-    "Was kostet das?": "**Nichts.** Alles bei VOLT ist kostenlos, ich arbeite nur auf Spendenbasis. "
-                       "Wenn du zufrieden bist, freue ich mich über eine freiwillige Spende. 💛",
-    "Wie läuft eine Bestellung ab?": "1) Ticket in #bestellen öffnen\n2) Ich prüfe deine Anfrage und schicke dir eine Bestätigung\n"
+    "Was kostet das?": "**Nichts.** Alles bei VOLT ist kostenlos. Wenn du zufrieden bist, freue ich mich über eine "
+                       "freiwillige Spende. Spenden klären wir direkt hier auf Discord, schreib dazu einfach in dein Ticket. 💛",
+    "Welche Produkte gibt es?": "👪 **Familien-Dashboard** (All-in-One)\n⚽ **Fussball-Manager**\n🗺️ **Routen-System**\n\n"
+                                f"Alle mit Vorschau zum Durchklicken auf **{SITE_LABEL}** und im Produkte-Kanal.",
+    "Wie läuft eine Bestellung ab?": "1) In #bestellen dein Produkt auswählen\n2) Ich prüfe deine Anfrage und schicke dir eine Bestätigung\n"
                                      "3) Du bestätigst oder lehnst ab\n4) Dein Projekt wird umgesetzt, du siehst den Status am Channel-Symbol.",
+    "Wo sehe ich, ob alles läuft?": "Im Uptime-Kanal hier auf Discord und im Live-Status auf der Website. "
+                                    "Dort steht, ob alle Systeme erreichbar sind, ob gerade Wartung ist oder eine Störung.",
     "Bekomme ich Bescheid, wenn das Team antwortet?": "Ja. Sobald jemand aus dem Team in deinem Ticket schreibt, bekommst du "
                                                        "eine DM mit Link zum Ticket. Mit **/dm-benachrichtigungen** schaltest du das an oder aus.",
     "Was bedeuten die Status-Symbole?": "🟡 Offen · 🔵 In Bearbeitung · 🟢 Läuft · 🟠 Wartungsmodus · "
@@ -619,7 +692,7 @@ FAQ = {
     "Wer sieht mein Ticket?": "Nur du und der Owner/Admin. Kein anderer User, auch keine Kunden.",
     "Was darf ich NICHT ins Ticket schreiben?": "Schicke **nie** deinen Bot-Token, Passwörter oder Zahlungsdaten. "
                                                 "Für Zugänge sprechen wir einen sicheren Weg ab.",
-    "Für wen ist das Angebot?": "Für kleine und große Streamer, Communities, Gruppen und Projekte.",
+    "Für wen ist das Angebot?": "Für Familien und Communities, die ihren Discord mit Dashboard und eigenem Bot organisieren wollen.",
 }
 
 
@@ -638,24 +711,22 @@ class FaqView(discord.ui.View):
 # ===============================================================
 # TICKET: OEFFNEN
 # ===============================================================
-PROJECT_TYPES = ["👪 Familien-Dashboard (All-in-One)", "⚽ Fussball-Manager", "🗺️ Routen-System",
-                 "🤖 Discord-Bot", "📺 Streamer-Bot", "🖥️ Discord-Server-Setup", "♻️ Server-Überarbeitung",
-                 "📦 Bot + Server (Komplettpaket)", "🎥 OBS-Einrichtung", "💡 Sonstiges"]
-
-
-class TicketModal(discord.ui.Modal, title="Neues Projekt"):
-    pname = discord.ui.TextInput(label="Projektname (wird zum Channel-Namen)", max_length=40)
-    desc = discord.ui.TextInput(label="Beschreibung / Wünsche", style=discord.TextStyle.paragraph,
-                                max_length=1000)
-    platform = discord.ui.TextInput(label="Plattform (Twitch / YouTube / TikTok / …)",
-                                    required=False, max_length=50)
-    link = discord.ui.TextInput(label="Kanal-Link", required=False, max_length=200)
-    budget = discord.ui.TextInput(label="Spende (optional – alles ist kostenlos)",
+class TicketModal(discord.ui.Modal, title="Neue Anfrage"):
+    pname = discord.ui.TextInput(label="Name eurer Familie / eures Projekts", max_length=40,
+                                 placeholder="wird zum Namen deines Ticket-Kanals")
+    desc = discord.ui.TextInput(label="Was braucht ihr? Wünsche", style=discord.TextStyle.paragraph,
+                                max_length=1000, placeholder="z. B. Ränge, Kanäle, Farben, besondere Systeme …")
+    platform = discord.ui.TextInput(label="Server / Community (optional)", required=False, max_length=50,
+                                    placeholder="z. B. euer RP-Server")
+    link = discord.ui.TextInput(label="Einladung zu eurem Discord (optional)", required=False, max_length=200)
+    budget = discord.ui.TextInput(label="Spende (optional, klären wir auf Discord)",
                                   required=False, max_length=60)
 
     def __init__(self, ptype: str):
         super().__init__()
         self.ptype = ptype
+        prod = product_by_label(ptype)
+        self.title = f"Anfrage: {prod['name']}" if prod else "Individuelle Anfrage"
 
     async def on_submit(self, interaction: discord.Interaction):
         guild, member = interaction.guild, interaction.user
@@ -680,29 +751,56 @@ class TicketModal(discord.ui.Modal, title="Neues Projekt"):
             self.platform.value or None, self.link.value or None, self.budget.value or None)
         invalidate_site_cache()
 
+        prod = product_by_label(self.ptype)
         e = emb(f"🎫 Ticket #{tid} – {self.pname.value}", color=0xF1C40F)
-        e.add_field(name="Projektart", value=self.ptype, inline=True)
-        e.add_field(name="Plattform", value=self.platform.value or "–", inline=True)
-        e.add_field(name="Link", value=self.link.value or "–", inline=False)
-        e.add_field(name="Budget / Spende", value=self.budget.value or "–", inline=True)
+        e.add_field(name="Produkt", value=self.ptype, inline=True)
+        e.add_field(name="Server / Community", value=self.platform.value or "–", inline=True)
+        e.add_field(name="Discord-Einladung", value=self.link.value or "–", inline=False)
+        e.add_field(name="Spende", value=self.budget.value or "–", inline=True)
         e.add_field(name="Von", value=member.mention, inline=True)
-        e.add_field(name="Beschreibung", value=self.desc.value, inline=False)
+        e.add_field(name="Wünsche", value=self.desc.value, inline=False)
+        if prod:
+            e.add_field(name="🔎 Vorschau", value=f"[{prod['name']} ansehen]({product_url(prod['key'])})", inline=False)
         await channel.send(
-            content=f"<@{OWNER_ID}> {member.mention}\nDein Ticket ist eingegangen. "
-                    f"Du bekommst hier ein Angebot, sobald es geprüft wurde.",
+            content=f"<@{OWNER_ID}> {member.mention}\nDeine Anfrage ist eingegangen. "
+                    f"Du bekommst hier eine Bestätigung, sobald sie geprüft wurde. "
+                    f"Antwortet das Team, bekommst du eine DM.",
             embed=e, view=AdminPanelView())
         await interaction.followup.send(f"✅ Dein Ticket wurde erstellt: {channel.mention}", ephemeral=True)
         await log(guild, "ticket-logs", emb("🟡 Ticket geöffnet",
                                             f"#{tid} · {self.pname.value} · {member.mention}\n{channel.mention}"))
 
 
+def product_options():
+    opts = [discord.SelectOption(label=p["name"], value=str(i), emoji=p["emoji"],
+                                 description=p["short"][:100]) for i, p in enumerate(PRODUCTS)]
+    opts.append(discord.SelectOption(label="Individuelle Anfrage", value=str(len(PRODUCTS)), emoji="💡",
+                                     description="Etwas anderes oder eine Erweiterung"))
+    return opts
+
+
+async def ticket_allowed(interaction: discord.Interaction) -> bool:
+    if await pool.fetchval("SELECT 1 FROM blacklist WHERE user_id=$1", interaction.user.id):
+        await interaction.response.send_message("🚫 Du kannst keine Tickets öffnen.", ephemeral=True)
+        return False
+    n = await pool.fetchval(
+        "SELECT count(*) FROM tickets WHERE user_id=$1 AND status NOT IN ('archived','rejected','deleted')",
+        interaction.user.id)
+    if n >= MAX_OPEN_TICKETS:
+        await interaction.response.send_message(
+            f"❌ Du hast schon {n} offene Tickets (Maximum {MAX_OPEN_TICKETS}).", ephemeral=True)
+        return False
+    return True
+
+
 class ProjectSelect(discord.ui.Select):
-    def __init__(self):
-        super().__init__(placeholder="Welches Projekt brauchst du?",
-                         options=[discord.SelectOption(label=t, value=str(i))
-                                  for i, t in enumerate(PROJECT_TYPES)])
+    def __init__(self, persistent: bool = False):
+        kw = {"custom_id": "volt:ticket:product"} if persistent else {}
+        super().__init__(placeholder="🛒 Produkt wählen und anfragen …", options=product_options(), row=0, **kw)
 
     async def callback(self, interaction: discord.Interaction):
+        if not await ticket_allowed(interaction):
+            return
         await interaction.response.send_modal(TicketModal(PROJECT_TYPES[int(self.values[0])]))
 
 
@@ -713,23 +811,27 @@ class ProjectSelectView(discord.ui.View):
 
 
 class TicketPanelView(discord.ui.View):
+    """Bestell-Panel: Produkt direkt auswählen, darunter die Vorschauen auf der Website."""
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(ProjectSelect(persistent=True))
+        for p in PRODUCTS:
+            self.add_item(discord.ui.Button(label=f"Vorschau {p['name']}", emoji=p["emoji"], row=1,
+                                            style=discord.ButtonStyle.link, url=product_url(p["key"])))
+
+
+class LegacyTicketButtonView(discord.ui.View):
+    """Alter „Ticket öffnen“-Button aus früheren Panels funktioniert weiter."""
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="Ticket öffnen", emoji="🎫",
                        style=discord.ButtonStyle.primary, custom_id="volt:ticket:open")
     async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if await pool.fetchval("SELECT 1 FROM blacklist WHERE user_id=$1", interaction.user.id):
-            return await interaction.response.send_message(
-                "🚫 Du kannst keine Tickets öffnen.", ephemeral=True)
-        n = await pool.fetchval(
-            "SELECT count(*) FROM tickets WHERE user_id=$1 AND status NOT IN ('archived','rejected','deleted')",
-            interaction.user.id)
-        if n >= MAX_OPEN_TICKETS:
-            return await interaction.response.send_message(
-                f"❌ Du hast schon {n} offene Tickets (Maximum {MAX_OPEN_TICKETS}).", ephemeral=True)
+        if not await ticket_allowed(interaction):
+            return
         await interaction.response.send_message(
-            "Was für ein Projekt brauchst du?", view=ProjectSelectView(), ephemeral=True)
+            "Welches Produkt möchtest du?", view=ProjectSelectView(), ephemeral=True)
 
 
 # ===============================================================
@@ -1150,19 +1252,25 @@ RULES = (
     "Verstöße führen zu Verwarnung, Timeout oder Bann.\n"
     "Klicke im Channel **#verify** auf **Regeln akzeptieren**, um den Server freizuschalten."
 )
-PRICE_TEXT = (
-    "**Professionelle Discord-Anpassung – übersichtlich, sicher und individuell.**\n\n"
-    "📁 **Channel & Kategorien** – übersichtliche Struktur, Text- und Sprachkanäle, Info-, Regel-, Team- "
-    "und Supportbereiche, private Bereiche\n"
-    "🎭 **Rollen** – Team-, Rang-, Mitglieds- und Sonderrollen, Namen & Farben, Rollen für Bots\n"
-    "🔐 **Permissions** – individuelle Berechtigungen, getrennte Bereiche, Schutz der Verwaltungsbereiche\n"
-    "🤖 **Bots** – Ticket-, Verify-, Sicherheits- und Streamer-Systeme nach Wunsch\n"
-    "♻️ **Überarbeitung** bestehender Server\n\n"
-    "📺 **Streamer** – Streamer-Bot mit Live-Alerts, Self-Roles und Zeitplan, Hilfe beim Einrichten von OBS\n"
-    "📊 **Dashboards** – Fraktions- und Familien-Dashboards mit eigenem Discord-Bot\n\n"
-    "💛 **Alles ist kostenlos.** Ich arbeite nur auf Spendenbasis, Spenden sind freiwillig.\n"
-    "Öffne einfach ein Ticket in #bestellen."
-)
+def product_embed(p: dict) -> discord.Embed:
+    e = discord.Embed(title=f"{p['emoji']} {p['name']}", url=product_url(p["key"]),
+                      description=f"**{p['tag']}** · {p['short']}\n\n" + "\n".join(f"⚡ {x}" for x in p["points"]) +
+                      f"\n\n💛 **0 €** · Spenden freiwillig, klären wir auf Discord\n🔎 {p['demo']} auf **{SITE_LABEL}**",
+                      color=BRAND_COLOR)
+    e.set_image(url=f"{SITE_URL}/assets/img/products/{p['key']}.jpg")
+    e.set_footer(text=BRAND)
+    return e
+
+
+def product_view(guild: discord.Guild, p: dict) -> discord.ui.View:
+    v = discord.ui.View(timeout=None)
+    v.add_item(discord.ui.Button(label="Vorschau ansehen", emoji="🔎", style=discord.ButtonStyle.link,
+                                 url=product_url(p["key"])))
+    order = find_channel(guild, "bestellen")
+    if order:
+        v.add_item(discord.ui.Button(label="Jetzt anfragen", emoji="🛒", style=discord.ButtonStyle.link,
+                                     url=channel_url(guild, order)))
+    return v
 
 
 async def honeypot_embed() -> discord.Embed:
@@ -1192,15 +1300,66 @@ async def refresh_honeypot_panel(guild: discord.Guild):
             return
 
 
+async def purge_own(ch, limit: int = 50):
+    try:
+        await ch.purge(limit=limit, check=lambda m: m.author.id == ch.guild.me.id)
+    except discord.HTTPException:
+        pass
+
+
 async def send_panel(guild: discord.Guild, key: str, embed: discord.Embed, view=None):
     ch = find_channel(guild, key)
     if not ch:
         return
-    try:
-        await ch.purge(limit=50, check=lambda m: m.author.id == guild.me.id)
-    except discord.HTTPException:
-        pass
+    await purge_own(ch)
     await ch.send(embed=embed, view=view)
+
+
+def order_embed(guild: discord.Guild) -> discord.Embed:
+    lines = [f"{p['emoji']} **{p['name']}** · {p['tag']}\n{p['short']} [Vorschau ansehen]({product_url(p['key'])})"
+             for p in PRODUCTS]
+    lines.append("💡 **Individuelle Anfrage**\nEtwas anderes oder eine Erweiterung für dein System.")
+    e = emb("🛒 Bestellen",
+            "Wähle unten dein Produkt aus und beschreib deine Wünsche. Dein Ticket sieht nur du und der Owner.\n\n"
+            + "\n\n".join(lines) +
+            "\n\n💛 **Alles kostenlos.** Spenden sind freiwillig und werden im Ticket geklärt.")
+    return e
+
+
+async def post_products_panel(guild: discord.Guild):
+    ch = find_channel(guild, "produkte") or find_channel(guild, "preisliste")
+    if not ch:
+        return
+    await purge_own(ch)
+    order = find_channel(guild, "bestellen")
+    head = emb("🛍️ Unsere Produkte",
+               "Jedes Produkt besteht aus Dashboard und eigenem Discord-Bot und wird für eure Familie eingerichtet.\n"
+               f"Zu jedem Produkt gibt es eine **Vorschau zum Durchklicken** auf **[{SITE_LABEL}]({SITE_URL}/#produkte)**.\n\n"
+               "💛 **Alles kostenlos** · Spenden freiwillig, klären wir auf Discord\n"
+               + (f"🛒 Anfragen in {order.mention}" if order else "🛒 Anfragen per Ticket"))
+    await ch.send(embed=head)
+    for p in PRODUCTS:
+        await ch.send(embed=product_embed(p), view=product_view(guild, p))
+
+
+async def post_website_panel(guild: discord.Guild):
+    ch = find_channel(guild, "website") or find_channel(guild, "webseite")
+    if not ch:
+        return
+    e = emb(f"🌐 {SITE_LABEL}",
+            "Die Website von **VOLT – Discord Solutions**.\n\n"
+            "📊 **Live-Status:** Werkbank, Wartezeit, Auslastung und Systemstatus\n"
+            "🔎 **Alle Produkte** mit Vorschau zum Durchklicken\n"
+            "👪 **Familien-Dashboard** mit klickbarer Demo\n"
+            "⭐ **Bewertungen** von Kunden\n"
+            "🇩🇪 **Made in Germany** · alles kostenlos\n\n"
+            f"👉 **{SITE_URL}**")
+    e.set_image(url=f"{SITE_URL}/assets/img/volt-banner-og.jpg")
+    v = volt_link_view()
+    v.add_item(discord.ui.Button(label="Live-Status", emoji="📊", style=discord.ButtonStyle.link,
+                                 url=f"{SITE_URL}/#status", row=1))
+    await purge_own(ch)
+    await ch.send(embed=e, view=v)
 
 
 async def post_panels(guild: discord.Guild):
@@ -1208,13 +1367,8 @@ async def post_panels(guild: discord.Guild):
     await send_panel(guild, "verify", emb("✅ Verifizierung",
                                           "Lies die Regeln in #regeln und klicke unten, um sie zu akzeptieren."),
                      VerifyView())
-    await send_panel(guild, "willkommen", emb(
-        "👋 Willkommen bei VOLT – Discord Solutions",
-        "Wir bauen **Familien-Dashboards, Fussball-Manager und Routen-Systeme** mit eigenem Discord-Bot, "
-        "dazu Bots und Server-Setups für Streamer und Communities. Alles kostenlos, Spenden freiwillig.\n\n"
-        f"🌐 Alle Produkte mit Vorschau: **{SITE_LABEL}**\n\n"
-        "1️⃣ Regeln akzeptieren\n2️⃣ Produkte auf der Website ansehen\n3️⃣ In #bestellen ein Ticket öffnen"),
-        volt_link_view())
+    # Willkommen: kein fester Kasten mehr, dort stehen jetzt die Willkommenskarten neuer Mitglieder
+    await cleanup_old_welcome_panel(guild)
     hp = find_channel(guild, "nicht-schreiben")
     if hp:
         try:  # Schreibrecht fuer alle setzen, damit die Falle funktioniert
@@ -1222,19 +1376,15 @@ async def post_panels(guild: discord.Guild):
         except discord.HTTPException:
             pass
     await send_panel(guild, "nicht-schreiben", await honeypot_embed())
-    await send_panel(guild, "server-status", emb("🟢 Status: Online", "Alle Systeme laufen."))
-    await send_panel(guild, "preisliste", emb("💰 Preisliste & Leistungen", PRICE_TEXT))
-    await send_panel(guild, "kosten", emb(
-        "💳 Kosten-Übersicht",
-        "• **Alles:** kostenlos – Bots, Server-Setups, Dashboards und OBS-Hilfe\n"
-        "• **Spenden:** immer freiwillig und willkommen 💛\n"
-        "• Vor dem Start bekommst du eine Bestätigung im Ticket und entscheidest selbst."),
-        donate_view() if DONATION_URL else None)
+    await update_monitor(guild, fresh=True)        # Uptime-Kanal (oder server-status)
+    await update_status_panel(guild, fresh=True)   # server-status, falls es einen eigenen Uptime-Kanal gibt
+    await post_website_panel(guild)
+    await post_products_panel(guild)               # Produkte-Kanal (früher Preisliste)
+    kosten = find_channel(guild, "kosten")         # Kosten-Übersicht ist überflüssig: Kanal wird geleert
+    if kosten:
+        await purge_own(kosten)
     await send_panel(guild, "faq", emb("❓ Häufige Fragen", "Wähle unten eine Frage aus."), FaqView())
-    await send_panel(guild, "bestellen", emb(
-        "🛒 Bestellen",
-        "Klicke auf **Ticket öffnen**, wähle dein Projekt und beschreibe deine Wünsche.\n"
-        "Dein Ticket sieht nur du und der Owner."), TicketPanelView())
+    await send_panel(guild, "bestellen", order_embed(guild), TicketPanelView())
     # Nicht purgen: sonst würden die geposteten Bewertungen mitgelöscht
     await refresh_review_panel(guild)
 
@@ -1767,11 +1917,16 @@ async def review_delete_ctx(interaction: discord.Interaction, message: discord.M
 
 @bot.tree.command(name="spenden", description="Freiwillig unterstützen")
 async def spenden_cmd(interaction: discord.Interaction):
-    if not DONATION_URL:
-        return await interaction.response.send_message("Aktuell ist kein Spendenlink hinterlegt.", ephemeral=True)
-    await interaction.response.send_message(
-        embed=emb("💛 Danke!", "Spenden sind komplett freiwillig und helfen, den Service kostenlos zu halten."),
-        view=donate_view(), ephemeral=True)
+    if DONATION_URL:
+        return await interaction.response.send_message(
+            embed=emb("💛 Danke!", "Spenden sind komplett freiwillig und helfen, den Service kostenlos zu halten."),
+            view=donate_view(), ephemeral=True)
+    order = find_channel(interaction.guild, "bestellen") if interaction.guild else None
+    await interaction.response.send_message(embed=emb(
+        "💛 Danke, dass du unterstützen willst!",
+        "Alles bei VOLT ist kostenlos, Spenden sind komplett freiwillig.\n\n"
+        "Spenden klären wir direkt hier auf Discord: Schreib einfach in dein Ticket"
+        + (f" oder öffne in {order.mention} eine **Individuelle Anfrage**." if order else ".")), ephemeral=True)
 
 
 @bot.tree.command(name="panels", description="Info-/Verify-/Ticket-Panels neu posten (nur Owner)")
@@ -1782,6 +1937,758 @@ async def panels_cmd(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     await post_panels(interaction.guild)
     await interaction.followup.send("✅ Panels aktualisiert.", ephemeral=True)
+
+
+# ===============================================================
+# ARBEITSSTATUS & UPTIME-MONITOR
+# /status online|störung|wartung, /störung, /wartungsmodus setzen den
+# Arbeitsstatus. Der Monitor prüft jede Minute die Website (und weitere
+# Dienste per /uptime) und aktualisiert EINE Nachricht im Uptime-Kanal,
+# ohne neue Statusmeldungen zu spammen.
+# ===============================================================
+WORK_STATES = {
+    #            Symbol  Titel                  kurz       Farbe       Discord-Status
+    "online":   ("🟢", "Alle Systeme laufen", "Online", C_ONLINE, discord.Status.online),
+    "wartung":  ("🟠", "Wartungsmodus", "Wartung", C_WARTUNG, discord.Status.idle),
+    "stoerung": ("🔴", "Störung", "Störung", C_STOERUNG, discord.Status.dnd),
+}
+WORK_DEFAULT_NOTE = {"online": "Alles läuft.", "wartung": "Alle Systeme werden aktualisiert.",
+                     "stoerung": "Wir arbeiten daran, dass alles schnell wieder läuft."}
+_work = {"state": "online", "note": "", "since": time.time()}
+_mon = {"channel_id": None, "message_id": None, "started": None, "targets": {}, "extra": [],
+        "panel_channel_id": None, "panel_message_id": None}
+_mon_lock = asyncio.Lock()
+MAX_EXTRA_TARGETS = 8
+
+
+def main_guild():
+    if GUILD_ID:
+        return bot.get_guild(GUILD_ID)
+    return bot.guilds[0] if bot.guilds else None
+
+
+async def load_status_state():
+    w = await get_setting("work_status")
+    if isinstance(w, dict) and w.get("state") in WORK_STATES:
+        _work.update(w)
+    m = await get_setting("monitor")
+    if isinstance(m, dict):
+        _mon.update({k: v for k, v in m.items() if k in _mon})
+    if not _mon.get("started"):
+        _mon["started"] = time.time()
+
+
+async def save_monitor():
+    await set_setting("monitor", _mon)
+
+
+def monitor_targets() -> list:
+    out = []
+    if SITE_ENABLED:
+        out.append({"name": SITE_HOST, "url": f"{SITE_URL}/health", "link": SITE_URL, "main": True})
+    for t in _mon.get("extra") or []:
+        out.append({"name": t["name"], "url": t["url"], "link": t["url"], "main": False})
+    return out
+
+
+def fmt_long(sec) -> str:
+    """8 Tage, 03:41:31"""
+    sec = max(0, int(sec or 0))
+    d, rest = divmod(sec, 86400)
+    h, rest = divmod(rest, 3600)
+    m, s_ = divmod(rest, 60)
+    clock = f"{h:02d}:{m:02d}:{s_:02d}"
+    if d:
+        return f"{d} {'Tag' if d == 1 else 'Tage'}, {clock}"
+    return clock
+
+
+def overall_state() -> str:
+    if _work["state"] == "wartung":
+        return "wartung"
+    downs = [t for t in monitor_targets() if (_mon["targets"].get(t["name"]) or {}).get("up") is False]
+    if _work["state"] == "stoerung" or downs:
+        return "stoerung"
+    return "online"
+
+
+def _pct(st) -> str:
+    if not st or not st.get("total"):
+        return "–"
+    v = st["ok"] / st["total"] * 100
+    return ("100" if v >= 99.995 else f"{v:.2f}".replace(".", ",")) + " %"
+
+
+def system_summary() -> dict:
+    """Für die Website: nur Zustand und Zahlen, keine Adressen von weiteren Diensten."""
+    targets = monitor_targets()
+    main = _mon["targets"].get(targets[0]["name"]) if targets else None
+    state = overall_state()
+    label = {"online": "Alle Systeme laufen", "wartung": "Wartungsmodus", "stoerung": "Störung"}[state]
+    if state == "stoerung" and _work["state"] != "stoerung":
+        label = "Eingeschränkt erreichbar"
+    iso = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).isoformat(timespec="seconds") if t else None
+    return {
+        "state": state, "label": label,
+        "note": clean_comment(_work.get("note") or ""),
+        "since": iso(_work.get("since")),
+        "uptime": round(main["ok"] / main["total"] * 100, 2) if main and main.get("total") else None,
+        "ms": main.get("ms") if main else None,
+        "checked": iso(main.get("checked")) if main else None,
+        "up": sum(1 for t in targets if (_mon["targets"].get(t["name"]) or {}).get("up") is not False),
+        "total": len(targets),
+    }
+
+
+def monitor_embed() -> discord.Embed:
+    state = overall_state()
+    targets = monitor_targets()
+    downs = [t for t in targets if (_mon["targets"].get(t["name"]) or {}).get("up") is False]
+    if state == "online":
+        title, color = "🟢 Alle Systeme sind erreichbar", C_ONLINE
+    elif state == "wartung":
+        title, color = "🟠 Wartungsmodus – alle Systeme werden aktualisiert", C_WARTUNG
+    elif _work["state"] == "stoerung":
+        title, color = "🔴 Störung – wir arbeiten daran", C_STOERUNG
+    else:
+        title, color = f"🔴 {len(downs)} {'Dienst' if len(downs) == 1 else 'Dienste'} nicht erreichbar", C_STOERUNG
+    text = (f"Der Status von **[{SITE_HOST}]({SITE_URL})** wird automatisch überwacht.\n"
+            f"Diese Nachricht wird live aktualisiert – es werden keine neuen Statusmeldungen gespammt.")
+    if _work.get("note"):
+        text += f"\n\n📝 **Hinweis:** {_work['note']}"
+    e = discord.Embed(title=title, description=text, color=color, timestamp=discord.utils.utcnow())
+    if bot.user:
+        e.set_author(name="VOLT • Service Monitor", icon_url=bot.user.display_avatar.url)
+        e.set_thumbnail(url=bot.user.display_avatar.url)
+    now = time.time()
+    if targets:
+        t0 = targets[0]
+        st = _mon["targets"].get(t0["name"]) or {}
+        up = st.get("up")
+        status_txt = ("🟢 **Online**" if up else "🔴 **Offline**" if up is False else "⏳ **Wird geprüft**")
+        code = f"\nHTTP {st['code']}" if st.get("code") else ("\nkeine Antwort" if up is False else "")
+        e.add_field(name="Service", value=f"🌐 [{t0['name']}]({t0['link']})")
+        e.add_field(name="Aktueller Status", value=status_txt + code)
+        e.add_field(name="Antwortzeit", value=f"📡 {st['ms']} ms" if st.get("ms") is not None else "📡 –")
+        e.add_field(name="Monitor-Uptime", value=f"⏱️ {fmt_long(now - (_mon.get('started') or now))}")
+        e.add_field(name="Zustand besteht seit", value=f"🕒 {fmt_long(now - st['since'])}" if st.get("since") else "🕒 –")
+        e.add_field(name="Letzter Service-Check",
+                    value=f"🔄 <t:{int(st['checked'])}:R>" if st.get("checked") else "🔄 gleich")
+        e.add_field(name="Erreichbarkeit", value=f"📈 {_pct(st)}")
+    ping = round(bot.latency * 1000) if bot.latency and bot.latency == bot.latency else None
+    e.add_field(name="VOLT-Bot", value="🟢 Online" + (f" · {ping} ms" if ping is not None else ""))
+    icon, wtitle, short, _, _ = WORK_STATES[_work["state"]]
+    e.add_field(name="Arbeitsstatus", value=f"{icon} {short}\ngesetzt <t:{int(_work['since'])}:R>")
+    extra = targets[1:]
+    if extra:
+        lines = []
+        for t in extra:
+            st = _mon["targets"].get(t["name"]) or {}
+            dot = "🟢" if st.get("up") else "🔴" if st.get("up") is False else "⏳"
+            bits = [f"HTTP {st['code']}" if st.get("code") else ("keine Antwort" if st.get("up") is False else "wird geprüft")]
+            if st.get("ms") is not None and st.get("up"):
+                bits.append(f"{st['ms']} ms")
+            bits.append(_pct(st))
+            lines.append(f"{dot} **[{t['name']}]({t['link']})** · " + " · ".join(bits))
+        e.add_field(name="Weitere Dienste", value="\n".join(lines)[:1024], inline=False)
+    e.set_footer(text=f"VOLT • Live-Status • Check alle {MONITOR_INTERVAL} Sek. • {SITE_LABEL}")
+    return e
+
+
+def monitor_view() -> discord.ui.View:
+    v = discord.ui.View(timeout=None)
+    v.add_item(discord.ui.Button(label="Website öffnen", emoji="🌐", style=discord.ButtonStyle.link, url=SITE_URL))
+    v.add_item(discord.ui.Button(label="Live-Status", emoji="📊", style=discord.ButtonStyle.link, url=f"{SITE_URL}/#status"))
+    return v
+
+
+def monitor_channel(guild: discord.Guild):
+    if _mon.get("channel_id"):
+        ch = guild.get_channel(_mon["channel_id"])
+        if ch:
+            return ch
+    return find_channel(guild, "uptime") or find_channel(guild, "server-status")
+
+
+async def update_monitor(guild: discord.Guild, *, fresh: bool = False):
+    """Bearbeitet die eine Monitor-Nachricht. Fehlt sie, wird sie neu gepostet."""
+    if guild is None:
+        return
+    ch = monitor_channel(guild)
+    if ch is None:
+        return
+    async with _mon_lock:
+        if not fresh and _mon.get("message_id") and _mon.get("channel_id") == ch.id:
+            try:
+                await ch.get_partial_message(_mon["message_id"]).edit(embed=monitor_embed(), view=monitor_view())
+                return
+            except discord.NotFound:
+                pass
+            except discord.HTTPException as ex:
+                print("Uptime-Monitor: Bearbeiten fehlgeschlagen:", ex)
+                return
+        try:
+            await ch.purge(limit=30, check=lambda m: m.author.id == guild.me.id)
+        except discord.HTTPException:
+            pass
+        try:
+            msg = await ch.send(embed=monitor_embed(), view=monitor_view())
+        except discord.HTTPException as ex:
+            print("Uptime-Monitor: Senden fehlgeschlagen:", ex)
+            return
+        _mon["channel_id"], _mon["message_id"] = ch.id, msg.id
+        await save_monitor()
+
+
+def status_panel_embed() -> discord.Embed:
+    icon, title, short, color, _ = WORK_STATES[_work["state"]]
+    e = discord.Embed(title=f"{icon} Status: {short}", color=color, timestamp=discord.utils.utcnow(),
+                      description=(_work.get("note") or WORK_DEFAULT_NOTE[_work["state"]]))
+    e.add_field(name="Seit", value=f"<t:{int(_work['since'])}:R>")
+    e.add_field(name="Live-Check", value=f"[{SITE_HOST}]({SITE_URL}/#status)")
+    e.set_footer(text=BRAND)
+    return e
+
+
+async def update_status_panel(guild: discord.Guild, *, fresh: bool = False):
+    """Im server-status-Kanal steht der Arbeitsstatus, wenn der Monitor in einem eigenen Uptime-Kanal läuft."""
+    if guild is None:
+        return
+    ch = find_channel(guild, "server-status")
+    mon = monitor_channel(guild)
+    if ch is None or (mon and mon.id == ch.id):
+        return
+    if not fresh and _mon.get("panel_message_id") and _mon.get("panel_channel_id") == ch.id:
+        try:
+            await ch.get_partial_message(_mon["panel_message_id"]).edit(embed=status_panel_embed(), view=monitor_view())
+            return
+        except discord.NotFound:
+            pass
+        except discord.HTTPException:
+            return
+    try:
+        await ch.purge(limit=30, check=lambda m: m.author.id == guild.me.id)
+    except discord.HTTPException:
+        pass
+    try:
+        msg = await ch.send(embed=status_panel_embed(), view=monitor_view())
+    except discord.HTTPException:
+        return
+    _mon["panel_channel_id"], _mon["panel_message_id"] = ch.id, msg.id
+    await save_monitor()
+
+
+def status_voice_name() -> str:
+    icon, _, short, _, _ = WORK_STATES[_work["state"]]
+    return f"{icon} Status: {short}"
+
+
+async def rename_status_voice(guild: discord.Guild):
+    if guild is None:
+        return
+    new = status_voice_name()
+    for ch in guild.voice_channels:
+        if "Status:" in ch.name and ch.name != new:
+            try:
+                await ch.edit(name=new, reason="VOLT Arbeitsstatus")
+            except discord.HTTPException:
+                pass  # Discord-Limit: update_stats zieht den Namen später nach
+
+
+async def apply_presence():
+    icon, _, short, _, dstatus = WORK_STATES[_work["state"]]
+    text = f"⚡ {SITE_LABEL}" if _work["state"] == "online" else f"{icon} {short} · {SITE_LABEL}"
+    try:
+        await bot.change_presence(status=dstatus, activity=discord.CustomActivity(name=text))
+    except discord.HTTPException:
+        pass
+
+
+async def set_work_status(state: str, note: str = None):
+    _work.update(state=state, note=(note or "").strip()[:300], since=time.time())
+    await set_setting("work_status", _work)
+    invalidate_site_cache()
+    await apply_presence()
+    g = main_guild()
+    await update_monitor(g)
+    await update_status_panel(g)
+    asyncio.create_task(rename_status_voice(g))  # Umbenennen kann bei Discord dauern, Befehl wartet nicht
+
+
+async def check_url(session: aiohttp.ClientSession, url: str):
+    t0 = time.perf_counter()
+    try:
+        async with session.get(url, allow_redirects=True, headers={"User-Agent": f"Mozilla/5.0 (compatible; VOLT-Uptime/1.0; +{SITE_URL})"}) as r:
+            await r.content.read(65536)
+            return r.status < 400, r.status, int((time.perf_counter() - t0) * 1000)
+    except Exception:
+        return False, None, None
+
+
+async def run_checks():
+    targets = monitor_targets()
+    if not targets:
+        return []
+    timeout = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        results = await asyncio.gather(*(check_url(session, t["url"]) for t in targets))
+    now = time.time()
+    changes = []
+    for t, (ok, code, ms) in zip(targets, results):
+        st = _mon["targets"].setdefault(t["name"], {"up": None, "since": now, "ok": 0, "total": 0, "fails": 0})
+        st["total"] += 1
+        st["checked"], st["code"], st["ms"] = now, code, ms
+        if ok:
+            st["ok"] += 1
+            st["fails"] = 0
+            new_up = True
+        else:
+            st["fails"] = st.get("fails", 0) + 1
+            new_up = False if st["fails"] >= 2 else st["up"]   # ein einzelner Aussetzer zählt noch nicht
+        if new_up is not None and new_up != st["up"]:
+            if st["up"] is not None:
+                changes.append((t, new_up, now - st["since"]))
+            st["up"], st["since"] = new_up, now
+    # Dienste, die entfernt wurden, nicht ewig mitschleppen
+    names = {t["name"] for t in targets}
+    for k in [k for k in _mon["targets"] if k not in names]:
+        _mon["targets"].pop(k, None)
+    await save_monitor()
+    return changes
+
+
+async def notify_owner_changes(changes):
+    if not changes:
+        return
+    try:
+        owner = bot.get_user(OWNER_ID) or await bot.fetch_user(OWNER_ID)
+    except discord.HTTPException:
+        return
+    for t, up, lasted in changes:
+        if up:
+            e = emb(f"🟢 {t['name']} ist wieder erreichbar", f"Ausfall hat {fmt_long(lasted)} gedauert.", C_ONLINE)
+        else:
+            e = emb(f"🔴 {t['name']} ist nicht erreichbar",
+                    f"Zwei Checks hintereinander ohne Antwort.\nAdresse: {t['link']}", C_STOERUNG)
+        try:
+            await owner.send(embed=e)
+        except discord.HTTPException:
+            pass
+
+
+@tasks.loop(seconds=MONITOR_INTERVAL)
+async def uptime_monitor():
+    try:
+        changes = await run_checks()
+        invalidate_site_cache()
+        await update_monitor(main_guild())
+        await notify_owner_changes(changes)
+    except Exception as ex:  # der Monitor darf nie stehen bleiben
+        print("Uptime-Monitor Fehler:", repr(ex))
+
+
+@uptime_monitor.before_loop
+async def _before_monitor():
+    await bot.wait_until_ready()
+    await asyncio.sleep(5)  # Website kurz hochfahren lassen
+
+
+STATUS_CHOICES = [
+    app_commands.Choice(name="online · alles läuft 🟢", value="online"),
+    app_commands.Choice(name="störung 🔴", value="stoerung"),
+    app_commands.Choice(name="wartung · alle Systeme werden aktualisiert 🟠", value="wartung"),
+]
+
+
+def status_reply() -> str:
+    icon, title, short, _, _ = WORK_STATES[_work["state"]]
+    where = monitor_channel(main_guild()) if main_guild() else None
+    end = "" if _work["state"] == "online" else "\nZurück auf grün mit `/status online`."
+    return (f"{icon} Status ist jetzt **{short}**" + (f": {_work['note']}" if _work.get("note") else "") +
+            f"\nAktualisiert: Bot-Status, Website, {where.mention if where else 'Uptime-Monitor'}" + end)
+
+
+@bot.tree.command(name="status", description="Arbeitsstatus setzen: online, Störung oder Wartung (nur Owner)")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@owner_check()
+@app_commands.describe(zustand="online, störung oder wartung", hinweis="Optional: kurzer Text, z. B. was gerade los ist")
+@app_commands.choices(zustand=STATUS_CHOICES)
+async def status_cmd(interaction: discord.Interaction, zustand: app_commands.Choice[str], hinweis: str = None):
+    await interaction.response.defer(ephemeral=True)
+    await set_work_status(zustand.value, hinweis)
+    await interaction.followup.send(status_reply(), ephemeral=True)
+
+
+@bot.tree.command(name="störung", description="Störung melden: Bot, Website und Uptime-Kanal zeigen rot (nur Owner)")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@owner_check()
+@app_commands.describe(hinweis="Optional: was ist los?")
+async def stoerung_cmd(interaction: discord.Interaction, hinweis: str = None):
+    await interaction.response.defer(ephemeral=True)
+    await set_work_status("stoerung", hinweis)
+    await interaction.followup.send(status_reply(), ephemeral=True)
+
+
+@bot.tree.command(name="wartungsmodus", description="Wartung: alle Systeme werden aktualisiert (nur Owner)")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@owner_check()
+@app_commands.describe(hinweis="Optional: z. B. wie lange es ungefähr dauert")
+async def wartung_cmd(interaction: discord.Interaction, hinweis: str = None):
+    await interaction.response.defer(ephemeral=True)
+    await set_work_status("wartung", hinweis or WORK_DEFAULT_NOTE["wartung"])
+    await interaction.followup.send(status_reply(), ephemeral=True)
+
+
+uptime_group = app_commands.Group(name="uptime", description="Uptime-Monitor verwalten (nur Owner)",
+                                  guild_only=True, default_permissions=discord.Permissions(administrator=True))
+
+
+@uptime_group.command(name="hier", description="Uptime-Monitor ab jetzt in diesem Kanal anzeigen")
+@owner_check()
+async def uptime_here_cmd(interaction: discord.Interaction):
+    if not isinstance(interaction.channel, discord.TextChannel):
+        return await interaction.response.send_message("❌ Das geht nur in einem Textkanal.", ephemeral=True)
+    await interaction.response.defer(ephemeral=True)
+    old = interaction.guild.get_channel(_mon.get("channel_id") or 0)
+    if old and old.id != interaction.channel.id and _mon.get("message_id"):
+        try:
+            await old.get_partial_message(_mon["message_id"]).delete()
+        except discord.HTTPException:
+            pass
+    _mon["channel_id"], _mon["message_id"] = interaction.channel.id, None
+    await update_monitor(interaction.guild, fresh=True)
+    await update_status_panel(interaction.guild)
+    await interaction.followup.send(f"✅ Der Uptime-Monitor läuft jetzt in {interaction.channel.mention}.", ephemeral=True)
+
+
+@uptime_group.command(name="hinzufügen", description="Weiteren Dienst überwachen, z. B. ein Dashboard")
+@owner_check()
+@app_commands.describe(name="Anzeigename, z. B. dash.voltstudio.work", url="Adresse mit https://")
+async def uptime_add_cmd(interaction: discord.Interaction, name: str, url: str):
+    name, url = name.strip()[:40], url.strip()
+    if not re.match(r"^https?://[^\s/$.?#][^\s]*$", url, re.I) or len(url) > 200:
+        return await interaction.response.send_message("❌ Bitte eine gültige Adresse mit https:// angeben.", ephemeral=True)
+    extra = _mon.setdefault("extra", [])
+    if any(t["name"].lower() == name.lower() for t in extra) or name.lower() == SITE_HOST.lower():
+        return await interaction.response.send_message("❌ Diesen Namen gibt es schon.", ephemeral=True)
+    if len(extra) >= MAX_EXTRA_TARGETS:
+        return await interaction.response.send_message(f"❌ Maximal {MAX_EXTRA_TARGETS} weitere Dienste.", ephemeral=True)
+    await interaction.response.defer(ephemeral=True)
+    extra.append({"name": name, "url": url})
+    await save_monitor()
+    await run_checks()
+    await update_monitor(interaction.guild)
+    st = _mon["targets"].get(name) or {}
+    await interaction.followup.send(
+        f"✅ **{name}** wird jetzt überwacht. Erster Check: "
+        + (f"HTTP {st['code']}, {st['ms']} ms" if st.get("code") else "keine Antwort (ab 2 Fehlversuchen gilt er als offline)"),
+        ephemeral=True)
+
+
+async def uptime_name_autocomplete(interaction: discord.Interaction, current: str):
+    return [app_commands.Choice(name=t["name"], value=t["name"])
+            for t in (_mon.get("extra") or []) if current.lower() in t["name"].lower()][:25]
+
+
+@uptime_group.command(name="entfernen", description="Dienst aus dem Uptime-Monitor entfernen")
+@owner_check()
+@app_commands.autocomplete(name=uptime_name_autocomplete)
+async def uptime_remove_cmd(interaction: discord.Interaction, name: str):
+    extra = _mon.get("extra") or []
+    keep = [t for t in extra if t["name"] != name]
+    if len(keep) == len(extra):
+        return await interaction.response.send_message("❌ Diesen Dienst gibt es nicht. Die Website selbst bleibt immer drin.",
+                                                       ephemeral=True)
+    await interaction.response.defer(ephemeral=True)
+    _mon["extra"] = keep
+    _mon["targets"].pop(name, None)
+    await save_monitor()
+    await update_monitor(interaction.guild)
+    await interaction.followup.send(f"✅ **{name}** wird nicht mehr überwacht.", ephemeral=True)
+
+
+@uptime_group.command(name="jetzt-prüfen", description="Alle Dienste sofort prüfen")
+@owner_check()
+async def uptime_now_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    changes = await run_checks()
+    invalidate_site_cache()
+    await update_monitor(interaction.guild)
+    await notify_owner_changes(changes)
+    lines = []
+    for t in monitor_targets():
+        st = _mon["targets"].get(t["name"]) or {}
+        lines.append(f"{'🟢' if st.get('up') else '🔴' if st.get('up') is False else '⏳'} {t['name']}: "
+                     + (f"HTTP {st['code']} · {st['ms']} ms" if st.get("code") else "keine Antwort"))
+    await interaction.followup.send("\n".join(lines) or "Keine Dienste.", ephemeral=True)
+
+
+bot.tree.add_command(uptime_group)
+
+
+# ===============================================================
+# WILLKOMMENSKARTEN
+# Jeder neue User bekommt im Willkommens-Kanal eine eigene Karte:
+# Profilbild im VOLT-Ring, Name, Mitgliedsnummer und Blitze, die aus
+# der User-ID berechnet werden. Dadurch sieht jede Karte anders aus.
+# Ohne Pillow gibt es eine schlichte Karte ohne Bild.
+# ===============================================================
+try:
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+    HAS_PIL = True
+except ImportError:  # requirements.txt: Pillow
+    HAS_PIL = False
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
+CARD_W, CARD_H = 1100, 400
+RED = (255, 31, 42)
+# Nur Zeichen, die die Karten-Schrift sicher kann (Emojis usw. fallen weg, ł -> l, ș -> s)
+CARD_OK = re.compile(r"[0-9A-Za-zÀ-ÖØ-öø-ÿ .,_\-'!?&+#]")
+
+
+CARD_MAP = str.maketrans({"Ł": "L", "ł": "l", "Đ": "D", "đ": "d", "ı": "i", "Œ": "OE", "œ": "oe", "ẞ": "SS",
+                          "Ħ": "H", "ħ": "h", "Ŧ": "T", "ŧ": "t"})
+
+
+def card_text(text: str) -> str:
+    out = []
+    for ch in (text or "").translate(CARD_MAP):
+        if CARD_OK.match(ch):
+            out.append(ch)
+        else:
+            out.extend(c for c in unicodedata.normalize("NFKD", ch) if CARD_OK.match(c))
+    return re.sub(r"\s+", " ", "".join(out)).strip()
+
+
+def _font(name: str, size: int):
+    try:
+        return ImageFont.truetype(os.path.join(FONT_DIR, name), size)
+    except OSError:
+        try:
+            return ImageFont.load_default(size)
+        except TypeError:
+            return ImageFont.load_default()
+
+
+def _bolt_points(rnd: random.Random, x0, y0, x1, y1, rough):
+    pts = [(x0, y0), (x1, y1)]
+    disp = rough
+    for _ in range(6):
+        nxt = [pts[0]]
+        for a, b in zip(pts, pts[1:]):
+            mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            ln = math.hypot(dx, dy) or 1
+            off = rnd.uniform(-disp, disp)
+            nxt += [(mx - dy / ln * off, my + dx / ln * off), b]
+        pts = nxt
+        disp *= .55
+    return pts
+
+
+def _spaced(draw, xy, text, font, fill, spacing):
+    x, y = xy
+    for ch in text:
+        draw.text((x, y), ch, font=font, fill=fill)
+        x += draw.textlength(ch, font=font) + spacing
+    return x
+
+
+def render_welcome_card(display_name: str, username: str, avatar: bytes, member_no: int, seed: int) -> io.BytesIO:
+    rnd = random.Random(seed)
+    W, H = CARD_W, CARD_H
+    base = Image.new("RGBA", (W, H), (5, 3, 3, 255))
+
+    # Rotes Glühen hinter dem Profilbild, Position leicht zufällig
+    glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gx, gy = 200 + rnd.randint(-30, 30), 200 + rnd.randint(-30, 30)
+    gd.ellipse((gx - 260, gy - 260, gx + 260, gy + 260), fill=(255, 31, 42, 70))
+    gd.ellipse((W - 260 + rnd.randint(-60, 60), -180, W + 200, 260), fill=(255, 31, 42, 28))
+    base = Image.alpha_composite(base, glow.filter(ImageFilter.GaussianBlur(90)))
+
+    # Diagonale Streifen wie auf der Website
+    stripes = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(stripes)
+    for x in range(-H, W + H, 46):
+        sd.line([(x, H), (x + int(H * 0.7), 0)], fill=(255, 31, 42, 18), width=1)
+    base = Image.alpha_composite(base, stripes)
+
+    # Blitze: Form, Anzahl und Lage hängen an der User-ID
+    bolts = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(bolts)
+    core = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    cd = ImageDraw.Draw(core)
+    sharp = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    hd = ImageDraw.Draw(sharp)
+    for i in range(rnd.randint(2, 3)):
+        x0 = rnd.uniform(720, W - 50)                 # rechts, damit der Name frei bleibt
+        x1 = min(W - 20, max(660, x0 + rnd.uniform(-170, 170)))
+        pts = _bolt_points(rnd, x0, -10, x1, rnd.uniform(H * .6, H + 20), 60)
+        bd.line(pts, fill=(255, 31, 42, 200), width=16, joint="curve")
+        hd.line(pts, fill=(255, 60, 70, 220), width=6, joint="curve")
+        cd.line(pts, fill=(255, 236, 238, 255), width=3, joint="curve")
+        # kleine Seitenarme
+        for _ in range(rnd.randint(1, 3)):
+            j = rnd.randint(8, len(pts) - 8)
+            sx, sy = pts[j]
+            br = _bolt_points(rnd, sx, sy, sx + rnd.uniform(-120, 120), sy + rnd.uniform(40, 120), 26)
+            bd.line(br, fill=(255, 31, 42, 150), width=8, joint="curve")
+            cd.line(br, fill=(255, 220, 224, 200), width=2, joint="curve")
+    base = Image.alpha_composite(base, bolts.filter(ImageFilter.GaussianBlur(10)))
+    base = Image.alpha_composite(base, sharp.filter(ImageFilter.GaussianBlur(2.5)))
+    base = Image.alpha_composite(base, core)
+
+    # Funken rund ums Profilbild
+    specks = ImageDraw.Draw(base)
+    cx, cy, r = 200, 200, 122
+    for _ in range(46):
+        a = rnd.uniform(0, math.tau)
+        rr = rnd.uniform(r + 14, r + 46)
+        px, py = cx + math.cos(a) * rr, cy + math.sin(a) * rr
+        ln = rnd.uniform(3, 11)
+        b = a + rnd.uniform(-.6, .6)
+        specks.line([(px, py), (px + math.cos(b) * ln, py + math.sin(b) * ln)],
+                    fill=(255, 42, 51, rnd.randint(70, 210)), width=rnd.choice((1, 2)))
+
+    # Ring mit Glühen
+    ring = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    rd = ImageDraw.Draw(ring)
+    rd.ellipse((cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8), outline=(255, 31, 42, 255), width=10)
+    base = Image.alpha_composite(base, ring.filter(ImageFilter.GaussianBlur(10)))
+    rd2 = ImageDraw.Draw(base)
+    rd2.ellipse((cx - r - 6, cy - r - 6, cx + r + 6, cy + r + 6), fill=(3, 1, 1, 255), outline=(255, 31, 42, 255), width=5)
+
+    # Profilbild
+    try:
+        av = Image.open(io.BytesIO(avatar)).convert("RGBA") if avatar else None
+    except Exception:
+        av = None
+    if av is not None:
+        av = ImageOps.fit(av, (2 * r, 2 * r), method=Image.LANCZOS)
+        mask = Image.new("L", (2 * r, 2 * r), 0)
+        ImageDraw.Draw(mask).ellipse((0, 0, 2 * r - 1, 2 * r - 1), fill=255)
+        base.paste(av, (cx - r, cy - r), mask)
+    else:
+        bolt = [(cx + 18, cy - 70), (cx - 26, cy + 8), (cx - 2, cy + 8), (cx - 22, cy + 72), (cx + 26, cy - 8), (cx + 4, cy - 8)]
+        rd2.polygon(bolt, fill=(255, 255, 255, 255))
+
+    # Text
+    d = ImageDraw.Draw(base)
+    tx = 375
+    f_eye = _font("Rajdhani-Bold.ttf", 30)
+    _spaced(d, (tx, 92), "WILLKOMMEN BEI VOLT", f_eye, RED + (255,), 6)
+    name = card_text(display_name) or card_text(username) or "Neues Mitglied"
+    name = "".join(c for c in name.upper() if CARD_OK.match(c))
+    size = 92
+    f_name = _font("Saira-BlackItalic.ttf", size)
+    max_w = W - tx - 60
+    while size > 40 and d.textlength(name, font=f_name) > max_w:
+        size -= 4
+        f_name = _font("Saira-BlackItalic.ttf", size)
+    if d.textlength(name, font=f_name) > max_w:
+        while len(name) > 4 and d.textlength(name + "…", font=f_name) > max_w:
+            name = name[:-1]
+        name = name.rstrip() + "…"
+    d.text((tx + 3, 140 + 3), name, font=f_name, fill=(255, 31, 42, 120))
+    d.text((tx, 140), name, font=f_name, fill=(255, 255, 255, 255))
+    f_sub = _font("Barlow-SemiBold.ttf", 30)
+    sub = f"Mitglied #{member_no}" + (f"  ·  @{username}" if username else "")
+    d.text((tx, 256), sub, font=f_sub, fill=(200, 184, 186, 255))
+    d.rectangle((tx, 312, tx + 64, 316), fill=RED + (255,))
+    f_site = _font("Rajdhani-Bold.ttf", 24)
+    _spaced(d, (tx + 84, 300), SITE_LABEL.upper(), f_site, (160, 140, 142, 255), 4)
+
+    # Abgerundete Karte mit dünnem Rahmen
+    mask = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, W - 1, H - 1), radius=30, fill=255)
+    card = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    card.paste(base, (0, 0), mask)
+    ImageDraw.Draw(card).rounded_rectangle((1, 1, W - 2, H - 2), radius=30, outline=(62, 28, 31, 255), width=2)
+    out = io.BytesIO()
+    card.save(out, "PNG", optimize=True)
+    out.seek(0)
+    return out
+
+
+async def welcome_payload(member: discord.Member):
+    """Embed, Datei und Buttons für die Willkommensnachricht."""
+    guild = member.guild
+    verify = find_channel(guild, "verify")
+    regeln = find_channel(guild, "regeln")
+    steps = []
+    if regeln:
+        steps.append(f"📜 Regeln lesen in {regeln.mention}")
+    steps.append(f"✅ Regeln akzeptieren in {verify.mention}" if verify else "✅ Regeln akzeptieren")
+    steps.append(f"🔎 Produkte mit Vorschau ansehen auf **[{SITE_LABEL}]({SITE_URL}/#produkte)**")
+    steps.append("🛒 Danach im Kanal **#bestellen** dein Produkt wählen")
+    e = discord.Embed(
+        title=f"⚡ Willkommen, {member.display_name}!",
+        description=(f"Schön, dass du da bist, {member.mention}! Du bist unser **{guild.member_count}. Mitglied**.\n\n"
+                     + "\n".join(steps)),
+        color=BRAND_COLOR, timestamp=discord.utils.utcnow())
+    e.set_footer(text=BRAND)
+    file = None
+    if HAS_PIL:
+        try:
+            data = await member.display_avatar.replace(size=256, static_format="png").read()
+        except (discord.HTTPException, ValueError):
+            data = None
+        try:
+            png = await asyncio.to_thread(render_welcome_card, member.display_name, member.name, data,
+                                          guild.member_count or 0, member.id)
+            file = discord.File(png, filename="willkommen.png")
+            e.set_image(url="attachment://willkommen.png")
+        except Exception as ex:
+            print("Willkommenskarte Fehler:", repr(ex))
+    if file is None:
+        e.set_thumbnail(url=member.display_avatar.url)
+    v = discord.ui.View(timeout=None)
+    v.add_item(discord.ui.Button(label="Produkte ansehen", emoji="🔎", style=discord.ButtonStyle.link,
+                                 url=f"{SITE_URL}/#produkte"))
+    v.add_item(discord.ui.Button(label=SITE_LABEL, emoji="🌐", style=discord.ButtonStyle.link, url=SITE_URL))
+    return e, file, v
+
+
+async def send_welcome(member: discord.Member):
+    ch = find_channel(member.guild, "willkommen")
+    if ch is None:
+        return
+    e, file, v = await welcome_payload(member)
+    kw = {"file": file} if file else {}
+    try:
+        await ch.send(content=member.mention, embed=e, view=v,
+                      allowed_mentions=discord.AllowedMentions(users=[member], roles=False, everyone=False), **kw)
+    except discord.HTTPException as ex:
+        print("Willkommensnachricht fehlgeschlagen:", ex)
+
+
+async def cleanup_old_welcome_panel(guild: discord.Guild):
+    """Der alte Willkommens-Kasten fliegt raus, die Willkommenskarten bleiben stehen."""
+    ch = find_channel(guild, "willkommen")
+    if ch is None:
+        return
+    try:
+        async for m in ch.history(limit=100):
+            if m.author.id == guild.me.id and m.embeds and (m.embeds[0].title or "").startswith("👋 Willkommen bei"):
+                await m.delete()
+    except discord.HTTPException:
+        pass
+
+
+@bot.tree.command(name="willkommen-test", description="Deine eigene Willkommenskarte ansehen (nur für dich sichtbar)")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@owner_check()
+async def welcome_test_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    e, file, v = await welcome_payload(interaction.user)
+    kw = {"file": file} if file else {}
+    await interaction.followup.send(
+        content="So sieht die Willkommenskarte aus." + ("" if HAS_PIL else " (Ohne Bild: Pillow fehlt in requirements.txt)"),
+        embed=e, view=v, ephemeral=True, **kw)
 
 
 # ===============================================================
@@ -1870,6 +2777,13 @@ async def help_cmd(interaction: discord.Interaction):
             "Rechtsklick auf Bewertung → Apps → **Bewertung löschen**\n"
             "`/blacklist add|remove|list` – Ticket-Sperre\n`/panels` – Panels neu posten\n"
             "`/setup` – Server komplett neu aufbauen (löscht alles!)"))
+        e.add_field(name="Status & Uptime", inline=False, value=(
+            "`/status online|störung|wartung` – Arbeitsstatus setzen\n"
+            "`/störung` · `/wartungsmodus` – Kurzbefehle, zurück mit `/status online`\n"
+            "`/uptime hier` – Monitor in diesem Kanal anzeigen\n"
+            "`/uptime hinzufügen|entfernen` – weitere Dienste überwachen\n"
+            "`/uptime jetzt-prüfen` – sofort prüfen\n"
+            "`/willkommen-test` – deine Willkommenskarte ansehen"))
     await interaction.response.send_message(embed=e, ephemeral=True)
 
 
@@ -2051,6 +2965,7 @@ async def on_member_join(member: discord.Member):
     if unv:
         await member.add_roles(unv, reason="Neues Mitglied")
     await log(guild, "join-leave-logs", emb("📥 Beigetreten", f"{member.mention} · Account {age_days} Tage alt", 0x2ECC71))
+    await send_welcome(member)
 
 
 @bot.event
@@ -2786,6 +3701,8 @@ async def update_stats():
             elif ch.name.startswith("⭐ Bewertungen:"):
                 new = (f"⭐ Bewertungen: {float(avg):.1f}/5 ({cnt})" if cnt
                        else "⭐ Bewertungen: bald verfügbar")
+            elif "Status:" in ch.name:
+                new = status_voice_name()
             if new and ch.name != new:
                 try:
                     await ch.edit(name=new, reason="VOLT Statistik")
@@ -2806,8 +3723,9 @@ async def _before_stats():
 # ===============================================================
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
 WEB_PAGES = {"index", "familien-dashboard", "fussball-manager", "routen-system", "datenschutz"}
-# Alte Adressen leiten dauerhaft weiter, damit geteilte Links nicht ins Leere laufen
-WEB_REDIRECTS = {"fraktion": "/familien-dashboard.html", "streamer": "/"}
+SITEMAP_PAGES = ("", "familien-dashboard", "fussball-manager", "routen-system", "datenschutz")
+# Saubere Adressen ohne .html. Alte Adressen leiten dauerhaft weiter, damit geteilte Links nicht ins Leere laufen.
+WEB_REDIRECTS = {"index": "/", "fraktion": "/familien-dashboard", "streamer": "/", "impressum": "/"}
 STATS_TTL = 60          # Sekunden, so oft wird die Datenbank höchstens gelesen
 COUNTS_TTL = 300        # Sekunden, so oft werden Mitglieder/Online von Discord geholt
 _site = {"t": 0.0, "data": None, "counts_t": 0.0, "members": None, "online": None}
@@ -2924,8 +3842,8 @@ async def build_site_stats() -> dict:
         "ok": True,
         "updated": discord.utils.utcnow().isoformat(timespec="seconds"),
         "invite": DISCORD_INVITE_URL,
-        "donate": DONATION_URL if DONATION_URL.startswith("https://") else None,
         "discord": {"members": _site["members"], "online": _site["online"]},
+        "system": system_summary(),
         "projects": {"running": running, "active": active, "paused": c["paused"],
                      "requests": new_requests, "done": c["archived"]},
         "workload": {"active": active, "capacity": MAX_PARALLEL, "percent": percent, "label": label,
@@ -2954,16 +3872,35 @@ async def api_stats(request: web.Request) -> web.Response:
     return web.json_response(_site["data"], headers={"Cache-Control": "public, max-age=30"})
 
 
+def _redirect(location: str, request: web.Request) -> web.Response:
+    if request.query_string:
+        location += "?" + request.query_string
+    return web.Response(status=301, headers={"Location": location, "Cache-Control": "public, max-age=3600"})
+
+
 async def site_page(request: web.Request) -> web.StreamResponse:
     name = request.match_info.get("name", "index")
-    if name.endswith(".html"):
-        name = name[:-5]
-    if name in WEB_REDIRECTS:
-        return web.Response(status=301, headers={"Location": WEB_REDIRECTS[name]})
+    if name.endswith(".html"):  # alte Links mit .html -> saubere Adresse
+        base = name[:-5]
+        if base in WEB_REDIRECTS:
+            return _redirect(WEB_REDIRECTS[base], request)
+        if base in WEB_PAGES:
+            return _redirect(f"/{base}", request)
+        raise web.HTTPNotFound()
+    if request.path != "/" and name in WEB_REDIRECTS:
+        return _redirect(WEB_REDIRECTS[name], request)
     path = os.path.join(WEB_DIR, f"{name}.html")
     if name not in WEB_PAGES or not os.path.isfile(path):
         raise web.HTTPNotFound()
-    return web.FileResponse(path, headers={"Cache-Control": "no-cache"})
+    return web.FileResponse(path, headers={"Cache-Control": "no-cache", "Content-Type": "text/html; charset=utf-8"})
+
+
+async def site_slash(request: web.Request) -> web.Response:
+    """/familien-dashboard/ -> /familien-dashboard"""
+    name = request.match_info.get("name", "")
+    if name in WEB_PAGES or name in WEB_REDIRECTS:
+        return _redirect(WEB_REDIRECTS.get(name, f"/{name}"), request)
+    raise web.HTTPNotFound()
 
 
 @web.middleware
@@ -2993,9 +3930,7 @@ async def site_robots(request: web.Request) -> web.Response:
 
 
 async def site_sitemap(request: web.Request) -> web.Response:
-    urls = "".join(f"<url><loc>{SITE_URL}/{p}</loc></url>"
-                   for p in ("", "familien-dashboard.html", "fussball-manager.html", "routen-system.html",
-                             "datenschutz.html"))
+    urls = "".join(f"<url><loc>{SITE_URL}/{p}</loc></url>" for p in SITEMAP_PAGES)
     return web.Response(content_type="application/xml",
                         text=f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>')
 
@@ -3020,6 +3955,7 @@ async def start_website():
     app.router.add_static("/assets/", os.path.join(WEB_DIR, "assets"), show_index=False, follow_symlinks=False)
     app.router.add_get("/", site_page)
     app.router.add_get("/{name}", site_page)
+    app.router.add_get("/{name}/", site_slash)
     _site_runner = web.AppRunner(app, access_log=None)
     await _site_runner.setup()
     await web.TCPSite(_site_runner, "0.0.0.0", SITE_PORT).start()
@@ -3049,7 +3985,9 @@ async def setup_hook():
     await pool.connect()
     await migrate_db()
     print(f"Datenbank: {DB_PATH}")
-    for v in (VerifyView(), TicketPanelView(), AdminPanelView(), OfferView(), ReviewView(), FaqView()):
+    await load_status_state()
+    for v in (VerifyView(), TicketPanelView(), LegacyTicketButtonView(), AdminPanelView(), OfferView(),
+              ReviewView(), FaqView()):
         bot.add_view(v)
     if GUILD_ID:
         g = discord.Object(id=GUILD_ID)
@@ -3063,6 +4001,7 @@ async def setup_hook():
         synced = await bot.tree.sync()
         print(f"{len(synced)} globale Befehle aktiv.")
     update_stats.start()
+    uptime_monitor.start()
 
 
 _cleaned_guild_commands = False
@@ -3072,10 +4011,8 @@ _cleaned_guild_commands = False
 async def on_ready():
     global _cleaned_guild_commands
     print(f"VOLT online als {bot.user} ({bot.user.id})")
-    try:  # Bot-Status: Website als dauerhafte Werbung
-        await bot.change_presence(activity=discord.CustomActivity(name=f"⚡ {SITE_LABEL}"))
-    except discord.HTTPException:
-        pass
+    # Bot-Status: Website als dauerhafte Werbung, bei Wartung/Störung mit Hinweis
+    await apply_presence()
     if not GUILD_ID and not _cleaned_guild_commands:
         # Ohne GUILD_ID laufen die Befehle global: alte Server-Befehle vom alten Bot entfernen
         _cleaned_guild_commands = True
