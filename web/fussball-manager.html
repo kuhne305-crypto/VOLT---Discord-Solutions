@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fussball-Manager · VOLT</title>
+<meta name="description" content="Fussball-Manager mit Discord-Login und eigenem Bot: Spiele planen, Zusagen per Discord, The Stage per Drag & Drop, Felder-Übersicht und Ergebnisse mit Bildbeweis. Kostenlos von VOLT.">
+<meta name="theme-color" content="#050303">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="de_DE">
+<meta property="og:site_name" content="VOLT – Discord Solutions">
+<meta property="og:title" content="Fussball-Manager · VOLT">
+<meta property="og:description" content="Fussball-Manager mit Discord-Login und eigenem Bot: Spiele planen, Zusagen per Discord, The Stage per Drag & Drop, Felder-Übersicht und Ergebnisse mit Bildbeweis. Kostenlos von VOLT.">
+<meta property="og:url" content="https://voltstudio.work/fussball-manager.html">
+<meta property="og:image" content="https://voltstudio.work/assets/img/volt-banner-og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="275">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://voltstudio.work/fussball-manager.html">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="assets/fonts/saira-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="logo" href="index.html" aria-label="VOLT Discord Solutions, Startseite">
+      <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17.5" fill="#050303" stroke="#ff1f2a" stroke-width="2.4"/><polygon fill="#fff" points="23.6,7.4 16.8,20.7 19.6,20.7 13.9,33.3 24.3,20.7 21.1,20.7"/></svg>
+      <span class="logo-word"><b>VOLT</b><span>DISCORD SOLUTIONS</span></span>
+    </a>
+    <nav class="nav" id="nav" aria-label="Hauptnavigation">
+      <a href="index.html">Start</a>
+      <div class="nav-drop is-current">
+        <button type="button" aria-expanded="false" aria-controls="dashMenu">Produkte <svg class="chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/></svg></button>
+        <div class="drop" id="dashMenu">
+          <a href="familien-dashboard.html"><svg viewBox="0 0 34 34" aria-hidden="true"><rect x=".5" y=".5" width="33" height="33" rx="8" fill="#1a0a0b" stroke="#3e1c1f"/><path d="M17 8.5 24.5 11v6c0 4.4-3.2 7.6-7.5 8.8-4.3-1.2-7.5-4.4-7.5-8.8v-6z" fill="none" stroke="#ff1f2a" stroke-width="2"/><path d="m17.6 12.5-3.4 5.3h2.4l-.8 3.9 3.6-5.4h-2.4z" fill="#fff"/></svg><b>Familien-Dashboard</b><small>All-in-One mit Discord-Bot, klickbare Demo</small></a>
+          <a href="fussball-manager.html" aria-current="page"><svg viewBox="0 0 34 34" aria-hidden="true"><rect x=".5" y=".5" width="33" height="33" rx="8" fill="#1a0a0b" stroke="#3e1c1f"/><circle cx="17" cy="17" r="8" fill="none" stroke="#ff1f2a" stroke-width="2"/><path d="M17 12.6l3.3 2.4-1.3 3.9h-4l-1.3-3.9z" fill="#fff"/></svg><b>Fussball-Manager</b><small>Spiele, The Stage, Felder, Ergebnisse</small></a>
+          <a href="routen-system.html"><svg viewBox="0 0 34 34" aria-hidden="true"><rect x=".5" y=".5" width="33" height="33" rx="8" fill="#1a0a0b" stroke="#3e1c1f"/><circle cx="11" cy="23" r="2.3" fill="#fff"/><circle cx="23" cy="11" r="2.3" fill="#ff1f2a"/><path d="M13 23h6a3.3 3.3 0 0 0 0-6.6h-4a3.3 3.3 0 0 1 0-6.6h6" fill="none" stroke="#ff1f2a" stroke-width="2" stroke-linecap="round"/></svg><b>Routen-System</b><small>Familien, Wachen, Arbeiter, Sanktionen</small></a>
+        </div>
+      </div>
+      <a href="index.html#status">Live-Status</a>
+      <a href="index.html#bewertungen">Bewertungen</a>
+      <a href="index.html#faq">FAQ</a>
+      <a class="btn btn-red btn-mobile" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/></svg>Discord beitreten</a>
+    </nav>
+    <a class="btn btn-red btn-sm" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite>Discord beitreten</a>
+    <button class="menu-btn" id="menuBtn" type="button" aria-expanded="false" aria-controls="nav">Menü</button>
+  </div>
+</header>
+<main>
+  <section class="hero page-hero">
+    <canvas class="storm" aria-hidden="true"></canvas>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="crumbs"><a href="index.html">Start</a><span aria-hidden="true">/</span><a href="index.html#produkte">Produkte</a><span aria-hidden="true">/</span><span style="color:#fff">Fussball-Manager</span></p>
+        <p class="eyebrow">Fussball-Manager · Dashboard + Bot</p>
+        <h1>Jedes Spiel. <span class="hot">Perfekt geplant.</span></h1>
+        <p class="lede">Spiele planen, Zusagen über Discord sammeln, The Stage einteilen und Ergebnisse mit Bildbeweis posten. Login nur mit Discord.</p>
+        <div class="cta-row">
+          <a class="btn btn-red" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/></svg>Discord beitreten &amp; anfragen</a>
+          <a class="btn btn-line" href="#dashboard">Vorschau ansehen<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h13M13 6l6 6-6 6"/></svg></a>
+        </div>
+      </div>
+      <div class="spec"><div><b>Discord-Login</b><span>Zugriff nur für eure Rollen</span></div><div><b>25 Plätze</b><span>pro Spiel</span></div><div><b>The Stage</b><span>Main &amp; Classic, Drag &amp; Drop</span></div><div><b>Bildbeweis</b><span>für jedes Ergebnis</span></div></div>
+    </div>
+  </section>
+
+  <section class="band" id="dashboard">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="eyebrow">Vorschau</p>
+        <h2>Das Fussball-Dashboard</h2>
+        <p>Spiele, Zusagen, The Stage, Felder und Ergebnisse auf einer Oberfläche. Login nur mit Discord.</p>
+      </header>
+      <div class="preview" role="img" aria-label="Vorschau des Fussball-Dashboards mit Beispieldaten"><div inert><div class="dash"><div class="d-top"><span class="d-brand"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="17.5" fill="#050303" stroke="#ff1f2a" stroke-width="2.4"/><polygon fill="#fff" points="23.6,7.4 16.8,20.7 19.6,20.7 13.9,33.3 24.3,20.7 21.1,20.7"/></svg>VOLT · Fussball</span><span class="d-srv">Familie Volt · Spielbetrieb</span><span class="d-right"><span class="off-pill">Discord-Login</span><span class="d-ava">FV</span></span></div><div class="d-body"><div class="d-side"><span class="on"><i></i>Übersicht</span><span class=""><i></i>Spiele</span><span class=""><i></i>The Stage</span><span class=""><i></i>Felder</span><span class=""><i></i>Ergebnisse</span><span class=""><i></i>Einstellungen</span></div><div class="d-main"><div class="d-kpis"><div class="d-kpi"><small>Nächstes Spiel</small><strong>Fr 21:00</strong><em>vs. Nordblock · Hafen</em></div><div class="d-kpi"><small>Zusagen</small><strong>18 / 25</strong><em>+3 seit gestern</em></div><div class="d-kpi"><small>Bilanz</small><strong>7 · 2 · 1</strong><em>Siege · Remis · Niederl.</em></div><div class="d-kpi"><small>Felder</small><strong>6</strong><em>2 umkämpft</em></div></div><div class="d-grid"><div class="d-card"><h4>The Stage (Main) <small>Fr 21:00 · per Drag &amp; Drop</small></h4><div class="stage"><div class="stage-col"><b>Main Act · Singer</b><span class="stage-chip">Marco</span><span class="stage-chip">Lena</span><span class="stage-chip">Dario</span><span class="stage-chip">Sofia</span></div><div class="stage-col"><b>Supporter · Backgrounddancer</b><span class="stage-chip">Enzo</span><span class="stage-chip">Giulia</span><span class="stage-chip">Paolo</span><span class="stage-chip">Nico</span><span class="stage-chip">Matteo</span></div><div class="stage-col"><b>Breakdancer A</b><span class="stage-chip">Chiara</span><span class="stage-chip">Tarik</span><span class="stage-chip">Ben</span></div><div class="stage-col bench"><b>Setzen diesmal aus</b><span class="stage-chip off">Luca</span><span class="stage-chip off">Kai</span></div></div></div><div class="d-card"><h4>Kommende Spiele <small>Zusagen über Discord</small></h4><div class="d-row"><span>Fr 21:00 · vs. Nordblock</span><span class="chip red">18 / 25</span></div><div class="d-row"><span>Sa 20:30 · vs. Ravens</span><span class="chip">11 / 25</span></div><div class="d-row"><span>So 19:00 · vs. Santo Rojo</span><span class="chip">6 / 25</span></div><div class="d-row"><span>Mo 21:00 · Training</span><span class="chip">offen</span></div></div><div class="d-card"><h4>Felder &amp; Stärke <small>Familien-Übersicht</small></h4><div class="hbar"><span>Hafen</span><b><i style="width:92%"></i></b><span>92</span></div><div class="hbar"><span>Docks</span><b><i style="width:78%"></i></b><span>78</span></div><div class="hbar"><span>Nordstadt</span><b><i style="width:64%"></i></b><span>64</span></div><div class="hbar"><span>Weinberge</span><b><i style="width:51%"></i></b><span>51</span></div><div class="hbar"><span>Altstadt</span><b><i style="width:37%"></i></b><span>37</span></div></div><div class="d-card"><h4>Letzte Ergebnisse <small>mit Bildbeweis</small></h4><table class="tbl"><thead><tr><th>Spiel</th><th>Ergebnis</th><th>Beweis</th></tr></thead><tbody><tr><td>vs. Kings 13</td><td class="up">3 : 1</td><td>📷</td></tr><tr><td>vs. Black Lotus</td><td class="">2 : 2</td><td>📷</td></tr><tr><td>vs. Nordblock</td><td class="down">1 : 2</td><td>📷</td></tr><tr><td>vs. Ravens</td><td class="up">4 : 0</td><td>📷</td></tr></tbody></table></div></div></div></div></div></div><div class="wm" aria-hidden="true"></div></div>
+      <p class="preview-cap">Beispielansicht mit erfundenen Daten. Nicht bedienbar.</p>
+    </div>
+  </section>
+
+  <section class="band band-alt" id="bot">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="eyebrow">Der passende Bot</p>
+        <h2>Was im Discord ankommt</h2>
+        <p>Alles, was ihr im Dashboard plant, landet automatisch im Discord, und Zusagen gehen zurück ins Dashboard.</p>
+      </header>
+      <div class="feature"><div class="feature-copy"><h3>Spiele &amp; Zusagen</h3><p>Ein neues Spiel wird im Discord angekündigt. Jeder sagt per Button zu oder ab, die Zahl der Teilnehmer steht live im Dashboard.</p><ul class="ticks"><li>Max. 25 Teilnehmer pro Spiel</li><li>Dabei · Nicht dabei · Später</li><li>Zusagen landen sofort im Dashboard</li></ul></div><div class="preview" role="img" aria-label="Vorschau Spielankündigung im Discord mit Beispieldaten"><div inert><div class="dc"><div class="dc-top"><span class="h">#</span><b>⚽│spiele</b></div><div class="dc-feed"><div class="dc-msg"><div class="dc-ava"><svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" fill="#0b0404"/><circle cx="20" cy="20" r="15" fill="none" stroke="#ff1f2a" stroke-width="2"/><polygon fill="#fff" points="22.8,9 16.9,20.6 19.4,20.6 14.4,31.6 23.4,20.6 20.6,20.6"/></svg></div><div><div class="dc-meta"><span class="dc-name red">Fussball-Bot</span><span class="dc-app">APP</span><time>Heute um 18:00</time></div><div class="dc-text"><span class="dc-role">@Familie</span></div><div class="dc-embed"><div class="dc-e-title plain">⚽ Neues Spiel · Freitag 21:00</div><div class="dc-fields "><div class="dc-field"><b>Gegner</b><span>Nordblock</span></div><div class="dc-field"><b>Feld</b><span>Hafen</span></div><div class="dc-field"><b>Teilnehmer</b><span>18 / 25</span></div></div><div class="dc-e-foot">Zusagen bis 20:45 · danach wird The Stage eingefroren</div></div><div class="dc-btns"><span class="dc-btn green">✅ Dabei</span><span class="dc-btn red">❌ Nicht dabei</span><span class="dc-btn ">🕒 Später</span></div></div></div></div></div></div><div class="wm" aria-hidden="true"></div></div></div>
+      <div class="feature"><div class="feature-copy"><h3>The Stage</h3><p>Die Einteilung baut ihr per Drag &amp; Drop im Dashboard. Der Bot postet sie, inklusive wer diesmal aussetzen musste, damit beim nächsten Mal durchgewechselt wird.</p><ul class="ticks"><li>The Stage (Main) und The Stage (Classic)</li><li>Nur Mitglieder mit freigegebener Rolle</li><li>Letzte Stage mit einem Klick übernehmen</li></ul></div><div class="preview" role="img" aria-label="Vorschau The-Stage-Einteilung im Discord mit Beispieldaten"><div inert><div class="dc"><div class="dc-top"><span class="h">#</span><b>🎭│the-stage</b></div><div class="dc-feed"><div class="dc-msg"><div class="dc-ava"><svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" fill="#0b0404"/><circle cx="20" cy="20" r="15" fill="none" stroke="#ff1f2a" stroke-width="2"/><polygon fill="#fff" points="22.8,9 16.9,20.6 19.4,20.6 14.4,31.6 23.4,20.6 20.6,20.6"/></svg></div><div><div class="dc-meta"><span class="dc-name red">Fussball-Bot</span><span class="dc-app">APP</span><time>Heute um 20:45</time></div><div class="dc-embed"><div class="dc-e-title plain">🎭 The Stage (Main) · Fr 21:00</div><div class="dc-fields one"><div class="dc-field"><b>🎤 Main Act</b><span><span class="dc-mention">@Marco</span> <span class="dc-mention">@Lena</span> <span class="dc-mention">@Dario</span> <span class="dc-mention">@Sofia</span></span></div><div class="dc-field"><b>💃 Supporter</b><span><span class="dc-mention">@Enzo</span> <span class="dc-mention">@Giulia</span> <span class="dc-mention">@Paolo</span> <span class="dc-mention">@Nico</span> <span class="dc-mention">@Matteo</span></span></div><div class="dc-field"><b>🕺 Breakdancer</b><span><span class="dc-mention">@Chiara</span> <span class="dc-mention">@Tarik</span> <span class="dc-mention">@Ben</span> <span class="dc-mention">@Mika</span> <span class="dc-mention">@Jule</span></span></div><div class="dc-field"><b>⏸️ Setzen diesmal aus</b><span><span class="dc-mention">@Luca</span> <span class="dc-mention">@Kai</span> · sind beim nächsten Mal zuerst dran</span></div></div><div class="dc-e-foot">Erstellt im Dashboard · 18 von 25 Plätzen besetzt</div></div></div></div></div></div></div><div class="wm" aria-hidden="true"></div></div></div>
+      <div class="feature"><div class="feature-copy"><h3>Ergebnisse</h3><p>Nach dem Spiel wird das Ergebnis mit Bildbeweis eingetragen und automatisch im Ergebnis-Kanal gepostet.</p><ul class="ticks"><li>Bildbeweis direkt angehängt</li><li>Bilanz im Dashboard</li><li>Felder-Stärke immer aktuell</li></ul></div><div class="preview" role="img" aria-label="Vorschau Ergebnis-Nachricht im Discord mit Beispieldaten"><div inert><div class="dc"><div class="dc-top"><span class="h">#</span><b>🏆│ergebnisse</b></div><div class="dc-feed"><div class="dc-msg"><div class="dc-ava"><svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" fill="#0b0404"/><circle cx="20" cy="20" r="15" fill="none" stroke="#ff1f2a" stroke-width="2"/><polygon fill="#fff" points="22.8,9 16.9,20.6 19.4,20.6 14.4,31.6 23.4,20.6 20.6,20.6"/></svg></div><div><div class="dc-meta"><span class="dc-name red">Fussball-Bot</span><span class="dc-app">APP</span><time>Heute um 21:38</time></div><div class="dc-embed green"><div class="dc-e-title plain">🏆 Ergebnis · Volt vs. Kings 13</div><div class="dc-fields "><div class="dc-field"><b>Endstand</b><span>3 : 1 gewonnen</span></div><div class="dc-field"><b>Feld</b><span>Hafen</span></div><div class="dc-field"><b>Dabei</b><span>18 Spieler</span></div></div><div class="dc-thumb"><span>BILDBEWEIS</span></div><div class="dc-e-foot">Eingetragen von Marco · Bildbeweis angehängt</div></div></div></div></div></div></div><div class="wm" aria-hidden="true"></div></div></div>
+    </div>
+  </section>
+
+  <section class="band" id="systeme">
+    <div class="wrap">
+      <header class="sec-head">
+        <p class="eyebrow">Was drin ist</p>
+        <h2>Alles für den Spielbetrieb.</h2>
+      </header>
+      <div class="spec sys"><div><b>Login nur per Discord</b><span>Kein Passwort. Zugriff nur für die Rollen, die ihr freigebt.</span></div><div><b>Spiele planen</b><span>Datum, Gegner und Feld. Max. 25 Teilnehmer pro Spiel.</span></div><div><b>Zusagen über Discord</b><span>Dabei, nicht dabei oder später, direkt per Button.</span></div><div><b>The Stage (Main &amp; Classic)</b><span>Einteilung per Drag &amp; Drop, pro Tag anpassbar.</span></div><div><b>Letzte Stage übernehmen</b><span>Ein Klick, und die Einteilung vom letzten Mal steht.</span></div><div><b>Durchwechseln</b><span>Wer aussetzen musste, steht im Discord und ist nächstes Mal zuerst dran.</span></div><div><b>Ergebnisse mit Bildbeweis</b><span>Eintragen, Beweis anhängen, automatisch im Discord posten.</span></div><div><b>Felder-Übersicht</b><span>Familien und Felder mit Stärke auf einen Blick.</span></div><div><b>Deine Farben</b><span>Jeder richtet sich sein Dashboard farblich selbst ein.</span></div></div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap"><div class="final-in">
+      <h2>Weniger Tabellen. <span>Mehr Spiel.</span></h2>
+      <p>Tritt dem VOLT-Discord bei, öffne ein Ticket und wähle Fussball-Manager. Kostenlos, Spenden freiwillig.</p>
+      <div class="cta-row">
+        <a class="btn btn-red" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/></svg>Discord beitreten</a>
+        <a class="btn btn-line" href="#" data-donate hidden target="_blank" rel="noopener">💛 Freiwillig spenden</a>
+      </div>
+    </div></div>
+  </section>
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <img class="foot-banner" src="assets/img/volt-banner.webp" width="1642" height="377" alt="VOLT – Discord Solutions" loading="lazy">
+        <p>Familien-Dashboards, Fussball-Manager und Routen-Systeme mit eigenem Discord-Bot. Gebaut und betreut von einer Person. Alles kostenlos, Spenden freiwillig.</p>
+      </div>
+      <div>
+        <h4>Produkte</h4>
+        <ul>
+          <li><a href="familien-dashboard.html">Familien-Dashboard</a></li>
+          <li><a href="fussball-manager.html">Fussball-Manager</a></li>
+          <li><a href="routen-system.html">Routen-System</a></li>
+          <li><a href="index.html#status">Live-Status</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Loslegen</h4>
+        <ul>
+          <li><a href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite>Discord beitreten</a></li>
+          <li><a href="index.html#bewertungen">Bewertungen</a></li>
+          <li><a href="index.html#faq">FAQ</a></li>
+          <li><a href="#" data-donate hidden target="_blank" rel="noopener">Spenden</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <span>© <span data-year>2026</span> VOLT – Discord Solutions · VoltStudio.work · Alle Vorschauen mit Beispieldaten</span>
+      <nav aria-label="Rechtliches"><a href="datenschutz.html">Datenschutz</a></nav>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

@@ -518,3 +518,32 @@ footer{border-top:1px solid var(--line);padding-block:2.5rem 3rem}
 .slot-txt small{font-size:.82rem;color:var(--soft);font-variant-numeric:tabular-nums}
 .slot.busy.paused{border-color:rgba(245,197,24,.5);background:rgba(245,197,24,.07)}
 .slot.busy.paused svg{color:var(--st-open);animation:none}
+
+/* 3 Produktkarten */
+.dash-links.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.dash-links.three .dlink-body .chip-state{margin-bottom:.15rem}
+.dash-links.three .dlink h3{font-size:1.45rem}
+@media (max-width:1080px){.dash-links.three{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:720px){.dash-links.three{grid-template-columns:minmax(0,1fr)}}
+.thumb .preview .dc-feed{padding-top:.75rem}
+
+/* The Stage */
+.stage{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.5rem}
+.stage-col{display:flex;flex-direction:column;gap:.3rem;background:#0b0606;border:1px solid var(--line);border-radius:7px;padding:.55rem;min-width:0}
+.stage-col b{font:700 .66rem var(--f-label);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.15rem}
+.stage-chip{display:flex;align-items:center;gap:.4rem;font-size:.8rem;padding:.3rem .45rem;border-radius:5px;background:#1a0e0f;border:1px solid #2c1719;color:#fff;cursor:grab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage-chip::before{content:"⋮⋮";font-size:.6rem;letter-spacing:-.1em;color:var(--muted)}
+.stage-chip.off{opacity:.55;border-style:dashed}
+.stage-col.bench{border-style:dashed}
+
+/* Discord-Auswahlmenü */
+.dc-select{margin-top:.5rem;max-width:420px;display:flex;justify-content:space-between;align-items:center;background:#1e1f22;border:1px solid #111214;border-radius:4px;padding:.55rem .75rem;color:var(--dc-muted);font-size:.9rem}
+.dc-select span{color:var(--dc-text)}
+
+/* Vorschau-Thumbs auf der Startseite: kleiner skaliert, Badge kompakt */
+.thumb .preview > [inert]{transform:scale(.8);transform-origin:top left;width:125%;height:125%}
+.thumb .wm::after{font-size:.55rem;padding:.3rem .45rem;right:6px;top:6px;bottom:auto;letter-spacing:.14em}
+.preview .dc{padding-bottom:2.2rem}
+.thumb .preview .dc{padding-bottom:0}
+
+.dlink{align-content:start}
