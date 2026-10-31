@@ -751,3 +751,5 @@ section[id]{scroll-margin-top:84px}
 .botlist li span{display:grid;min-width:0}
 .botlist li b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .botlist li small{font-size:.84rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.sysrow-facts div[hidden]{display:none}
+.flag-big{display:block;width:48px;height:32px;border-radius:4px;background:linear-gradient(#111 0 33.4%,#dd0000 33.4% 66.7%,#ffce00 66.7%);box-shadow:0 0 0 1px rgba(255,255,255,.14),0 0 24px -6px rgba(255,31,42,.6)}
