@@ -150,7 +150,11 @@
     projects: { running: 3, active: 1, paused: 0, requests: 1, done: 7 },
     workload: { active: 1, capacity: 2, percent: 50, label: "Gut ausgelastet", queue: 1, wait_days: 2, per_day: 1,
       slots: [{ n: 1, busy: true, type: "👪 Familien-Dashboard", running: true, seconds: 5040 }, { n: 2, busy: false }] },
-    system: { state: "online", label: "Alle Systeme laufen", note: "", uptime: 99.98, ms: 42, checked: null, since: null, up: 1, total: 1 },
+    system: { state: "online", label: "Alle Systeme laufen", note: "", uptime: 99.98, ms: 42, checked: null, since: null, up: 1, total: 1, bots_online: 3, bots_total: 3 },
+    bots: { online: 3, total: 3, list: [
+      { name: "Familie Volt", product: "Familien-Dashboard", state: "online", ping: 41, uptime: 99.97, last: null },
+      { name: "Kunden-Bot · Fussball-Manager", product: "Fussball-Manager", state: "online", ping: 38, uptime: 100, last: null },
+      { name: "Routen-Discord", product: "Routen-System", state: "online", ping: 52, uptime: 99.9, last: null }] },
     build: { avg_days: null, samples: 0, avg_work_seconds: 11520, work_samples: 4 },
     team: { people: 1 },
     reviews: {
@@ -285,6 +289,7 @@
     }
 
     renderSystem(d.system);
+    renderBots(d.bots);
     if (typeof d.invite === "string" && /^https:\/\/(discord\.gg|discord\.com\/invite)\/[A-Za-z0-9-]+$/.test(d.invite)) {
       INVITE_URL = d.invite;
       $$("a[data-invite]").forEach(function (a) { a.href = d.invite; });
@@ -292,7 +297,7 @@
   }
 
   /* ---------- Systemstatus (/status, /störung, /wartungsmodus + Uptime-Check) ---------- */
-  var SYS_TEXT = { online: "Alle Systeme laufen", wartung: "Wartungsmodus", stoerung: "Störung" };
+  var SYS_TEXT = { online: "Alle Systeme laufen", wartung: "Wartungsmodus", stoerung: "Störung", teilweise: "Teilweise eingeschränkt" };
   function ago(iso) {
     var t = Date.parse(iso); if (isNaN(t)) return "–";
     var s = Math.max(0, Math.round((Date.now() - t) / 1000));
@@ -300,6 +305,33 @@
     if (s < 3600) return "vor " + Math.round(s / 60) + " Min.";
     return "vor " + Math.round(s / 3600) + " Std.";
   }
+  function renderBots(bots) {
+    var box = $("[data-bots]"), list = $("#botList");
+    if (!box || !list) return;
+    var items = (bots && bots.list) || [];
+    box.hidden = !items.length;
+    if (!items.length) return;
+    $("[data-bots-sum]", box).textContent = nf(bots.online) + " von " + nf(bots.total) + " online";
+    list.textContent = "";
+    items.forEach(function (b) {
+      var li = document.createElement("li");
+      li.setAttribute("data-state", b.state);
+      var dot = document.createElement("i"); dot.setAttribute("aria-hidden", "true"); li.appendChild(dot);
+      var txt = document.createElement("span");
+      var name = document.createElement("b"); name.textContent = b.name; txt.appendChild(name);
+      var meta = document.createElement("small");
+      var parts = [];
+      if (b.state === "online") parts.push("online" + (typeof b.ping === "number" ? " · " + nf(b.ping) + " ms" : ""));
+      else if (b.state === "wartet") parts.push("wartet auf erste Meldung");
+      else parts.push("offline" + (b.last ? " · zuletzt " + ago(b.last) : ""));
+      if (typeof b.uptime === "number") parts.push(nf(b.uptime, b.uptime >= 99.995 ? 0 : 2) + " %");
+      meta.textContent = parts.join(" · ");
+      txt.appendChild(meta);
+      li.appendChild(txt);
+      list.appendChild(li);
+    });
+  }
+
   function renderSystem(sys) {
     if (!sys || !sys.state) return;
     var st = SYS_TEXT[sys.state] ? sys.state : "online";
@@ -315,16 +347,21 @@
       if (web) web.textContent = typeof sys.uptime === "number" ? nf(sys.uptime, sys.uptime >= 99.995 ? 0 : 2) + " % erreichbar" : (sys.total ? "geprüft" : "–");
       if (ms) ms.textContent = typeof sys.ms === "number" ? nf(sys.ms) + " ms" : "–";
       if (ck) ck.textContent = sys.checked ? ago(sys.checked) : "–";
+      var bw = $("[data-sys-bots-wrap]", row), bv = $("[data-sys-bots]", row);
+      if (bw && bv) {
+        bw.hidden = !sys.bots_total;
+        bv.textContent = nf(sys.bots_online) + " / " + nf(sys.bots_total) + " online";
+      }
     }
     if (typeof sys.uptime === "number") {
-      setAll("uptime", nf(sys.uptime, sys.uptime >= 99.995 ? 0 : 2) + " %");
+      setAll("uptime", nf(sys.uptime, sys.uptime >= 99.995 ? 0 : 2) + "\u00a0%");
       setAll("uptime-sub", "Website, " + (typeof sys.ms === "number" ? "Antwort in " + nf(sys.ms) + " ms" : "rund um die Uhr geprüft"));
     } else {
       setAll("uptime", "–");
     }
     var bar = $("[data-sysbar]");
     if (bar) {
-      if (st === "online") { bar.hidden = true; }
+      if (st === "online" || st === "teilweise") { bar.hidden = true; }
       else {
         bar.hidden = false;
         bar.setAttribute("data-state", st);
