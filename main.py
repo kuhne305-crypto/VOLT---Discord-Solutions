@@ -13,6 +13,7 @@ import asyncio
 import json
 import random
 import hashlib
+import hmac
 import secrets
 import mimetypes
 import unicodedata
@@ -52,6 +53,14 @@ SITE_URL = os.environ.get("SITE_URL", "https://voltstudio.work").rstrip("/")
 SITE_LABEL = "VoltStudio.work"
 SITE_HOST = SITE_URL.split("://", 1)[-1].split("/", 1)[0]
 MONITOR_INTERVAL = max(30, int(os.environ.get("MONITOR_INTERVAL", "60")))  # Sekunden zwischen zwei Uptime-Checks
+# "VOLT System" = Zustand der Server-Plattform in der eigenen Region (Compute, Netzwerk, Speicher).
+VOLT_SYSTEM_URL = os.environ.get("VOLT_SYSTEM_URL", "https://api.railwaystatus.com/status")
+VOLT_SYSTEM_REGION = os.environ.get("VOLT_SYSTEM_REGION", "US West")
+VOLT_SYSTEM_PARTS = ("Compute", "Networking — Public", "Networking — Private", "Storage")
+# Optional: Schlüssel für die Verwaltung per HTTP (Bots anlegen, Dienste überwachen). Leer = aus.
+ADMIN_API_KEY = os.environ.get("VOLT_ADMIN_KEY", "").strip()
+# Wird diese Nummer erhöht, postet der Bot nach dem nächsten Start einmal alle Panels neu (wie /panels).
+PANELS_VERSION = "2026-10-31c"
 
 MIN_ACCOUNT_AGE_DAYS = int(os.environ.get("MIN_ACCOUNT_AGE_DAYS", "3"))  # 0 = aus
 RAID_JOINS = int(os.environ.get("RAID_JOINS", "6"))      # so viele Joins ...
@@ -2014,9 +2023,10 @@ def overall_state() -> str:
     if _work["state"] == "wartung":
         return "wartung"
     downs = [t for t in monitor_targets() if (_mon["targets"].get(t["name"]) or {}).get("up") is False]
-    if _work["state"] == "stoerung" or downs:
+    vs = (_mon.get("vsys") or {}).get("state")
+    if _work["state"] == "stoerung" or downs or vs == "stoerung":
         return "stoerung"
-    if any(b["state"] == "offline" for b in _bots_cache["list"]):
+    if vs in ("eingeschraenkt", "wartung"):
         return "teilweise"
     return "online"
 
@@ -2047,7 +2057,8 @@ def system_summary() -> dict:
         "checked": iso(main.get("checked")) if main else None,
         "up": sum(1 for t in targets if (_mon["targets"].get(t["name"]) or {}).get("up") is not False),
         "total": len(targets),
-        "bots_online": _bots_cache["online"], "bots_total": _bots_cache["total"],
+        "vsys": VSYS_TEXT.get((_mon.get("vsys") or {}).get("state"), VSYS_TEXT[None])[1],
+        "vsys_state": (_mon.get("vsys") or {}).get("state"),
     }
 
 
@@ -2060,10 +2071,11 @@ def monitor_embed() -> discord.Embed:
     elif state == "wartung":
         title, color = "🟠 Wartungsmodus – alle Systeme werden aktualisiert", C_WARTUNG
     elif state == "teilweise":
-        off = sum(1 for b in _bots_cache["list"] if b["state"] == "offline")
-        title, color = f"🟠 {off} {'Bot ist' if off == 1 else 'Bots sind'} offline – Website läuft", C_WARTUNG
+        title, color = "🟠 VOLT System eingeschränkt – wir behalten es im Blick", C_WARTUNG
     elif _work["state"] == "stoerung":
         title, color = "🔴 Störung – wir arbeiten daran", C_STOERUNG
+    elif (_mon.get("vsys") or {}).get("state") == "stoerung" and not downs:
+        title, color = "🔴 Störung im VOLT System", C_STOERUNG
     else:
         title, color = f"🔴 {len(downs)} {'Dienst' if len(downs) == 1 else 'Dienste'} nicht erreichbar", C_STOERUNG
     text = (f"Der Status von **[{SITE_HOST}]({SITE_URL})** wird automatisch überwacht.\n"
@@ -2089,8 +2101,9 @@ def monitor_embed() -> discord.Embed:
         e.add_field(name="Letzter Service-Check",
                     value=f"🔄 <t:{int(st['checked'])}:R>" if st.get("checked") else "🔄 gleich")
         e.add_field(name="Erreichbarkeit", value=f"📈 {_pct(st)}")
-    ping = round(bot.latency * 1000) if bot.latency and bot.latency == bot.latency else None
-    e.add_field(name="VOLT-Bot", value="🟢 Online" + (f" · {ping} ms" if ping is not None else ""))
+    vs = _mon.get("vsys") or {}
+    vi, vt = VSYS_TEXT.get(vs.get("state"), VSYS_TEXT[None])
+    e.add_field(name="VOLT System", value=f"{vi} {vt}" + (f"\nseit <t:{int(vs['since'])}:R>" if vs.get("since") else ""))
     icon, wtitle, short, _, _ = WORK_STATES[_work["state"]]
     e.add_field(name="Arbeitsstatus", value=f"{icon} {short}\ngesetzt <t:{int(_work['since'])}:R>")
     extra = targets[1:]
@@ -2105,9 +2118,6 @@ def monitor_embed() -> discord.Embed:
             bits.append(_pct(st))
             lines.append(f"{dot} **[{t['name']}]({t['link']})** · " + " · ".join(bits))
         e.add_field(name="Weitere Dienste", value="\n".join(lines)[:1024], inline=False)
-    if _bots_cache["total"]:
-        e.add_field(name=f"🤖 Bots · {_bots_cache['online']}/{_bots_cache['total']} online",
-                    value=bots_field_text() or "–", inline=False)
     e.set_footer(text=f"VOLT • Live-Status • Check alle {MONITOR_INTERVAL} Sek. • {SITE_LABEL}")
     return e
 
@@ -2249,6 +2259,7 @@ async def run_checks():
     timeout = aiohttp.ClientTimeout(total=10)
     async with aiohttp.ClientSession(timeout=timeout) as session:
         results = await asyncio.gather(*(check_url(session, t["url"]) for t in targets))
+        await check_volt_system(session)
     now = time.time()
     changes = []
     for t, (ok, code, ms) in zip(targets, results):
@@ -2272,6 +2283,47 @@ async def run_checks():
         _mon["targets"].pop(k, None)
     await save_monitor()
     return changes
+
+
+VSYS_TEXT = {"ok": ("🟢", "Betriebsbereit"), "eingeschraenkt": ("🟠", "Eingeschränkt"),
+             "wartung": ("🔧", "Wartung"), "stoerung": ("🔴", "Störung"), None: ("⏳", "wird geprüft")}
+
+
+def _vsys_rank(status: str) -> int:
+    s_ = (status or "").upper()
+    if "OUTAGE" in s_:
+        return 3
+    if "DEGRADED" in s_:
+        return 2
+    if "MAINTENANCE" in s_:
+        return 1
+    return 0
+
+
+async def check_volt_system(session: aiohttp.ClientSession):
+    """Zustand der Server-Plattform (nur die Teile, die laufende Bots betreffen). Unklare Antwort = nichts ändern."""
+    try:
+        async with session.get(VOLT_SYSTEM_URL, headers={"User-Agent": f"VOLT-Uptime/1.0 (+{SITE_URL})"}) as r:
+            if r.status != 200:
+                return
+            data = await r.json(content_type=None)
+    except Exception:
+        return
+    leaves = []
+    for g in (data.get("components") or []) if isinstance(data, dict) else []:
+        if VOLT_SYSTEM_REGION.lower() in str(g.get("name", "")).lower():
+            for c in g.get("components") or []:
+                if str(c.get("name", "")).startswith(VOLT_SYSTEM_PARTS):
+                    leaves.append(str(c.get("status", "")))
+    if not leaves:
+        return
+    rank = max(_vsys_rank(x) for x in leaves)
+    new = {0: "ok", 1: "wartung", 2: "eingeschraenkt"}.get(rank, "stoerung")
+    vs = _mon.setdefault("vsys", {})
+    now = time.time()
+    if vs.get("state") != new:
+        vs["since"] = now
+    vs["state"], vs["checked"] = new, now
 
 
 async def notify_owner_changes(changes):
@@ -2445,8 +2497,8 @@ async def uptime_now_cmd(interaction: discord.Interaction):
         st = _mon["targets"].get(t["name"]) or {}
         lines.append(f"{'🟢' if st.get('up') else '🔴' if st.get('up') is False else '⏳'} {t['name']}: "
                      + (f"HTTP {st['code']} · {st['ms']} ms" if st.get("code") else "keine Antwort"))
-    for b in _bots_cache["list"]:
-        lines.append(f"{'🟢' if b['state'] == 'online' else '⏳' if b['state'] == 'wartet' else '🔴'} Bot {b['name']}")
+    vi, vt = VSYS_TEXT.get((_mon.get("vsys") or {}).get("state"), VSYS_TEXT[None])
+    lines.append(f"{vi} VOLT System: {vt}")
     await interaction.followup.send("\n".join(lines) or "Keine Dienste.", ephemeral=True)
 
 
@@ -2463,7 +2515,8 @@ BOT_OFFLINE_AFTER = 180          # Sekunden ohne Meldung = offline
 BOT_HEARTBEAT_INTERVAL = 60
 PROCESS_START = time.time()
 BOT_PRODUCTS = [("👪 Familien-Dashboard", "Familien-Dashboard"), ("⚽ Fussball-Manager", "Fussball-Manager"),
-                ("🗺️ Routen-System", "Routen-System"), ("🤖 Sonstiger Bot", "Bot")]
+                ("🗺️ Routen-System", "Routen-System"), ("📺 Streamer-Bot", "Streamer-Bot"),
+                ("🤖 Sonstiger Bot", "Bot")]
 
 
 def _key_hash(key: str) -> str:
@@ -2622,6 +2675,59 @@ async def api_heartbeat(request: web.Request) -> web.Response:
     if not last or now - last > BOT_OFFLINE_AFTER:
         invalidate_site_cache()  # war offline oder neu: Website sofort aktualisieren
     return web.json_response({"ok": True, "name": r["name"], "interval": BOT_HEARTBEAT_INTERVAL}, headers=nostore)
+
+
+# ---------- Verwaltung per HTTP (nur mit VOLT_ADMIN_KEY) ----------
+async def _admin_ok(request: web.Request) -> bool:
+    if not ADMIN_API_KEY:
+        return False
+    given = request.headers.get("X-Volt-Admin", "")
+    return bool(given) and hmac.compare_digest(given.encode(), ADMIN_API_KEY.encode())
+
+
+async def api_admin_bots(request: web.Request) -> web.Response:
+    nostore = {"Cache-Control": "no-store"}
+    if pool is None or not await _admin_ok(request):
+        return web.json_response({"ok": False}, status=403, headers=nostore)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    name = re.sub(r"\s+", " ", str(data.get("name") or "")).strip()[:40]
+    product = str(data.get("product") or "Bot")[:40]
+    if not name:
+        return web.json_response({"ok": False, "error": "name fehlt"}, status=400, headers=nostore)
+    key = "volt_" + secrets.token_urlsafe(24)
+    row = await pool.fetchrow("SELECT id FROM bots WHERE lower(name)=lower($1)", name)
+    if row:
+        await pool.execute("UPDATE bots SET key_hash=$1, product=$2, public=$3 WHERE id=$4",
+                           _key_hash(key), product, 0 if data.get("public") is False else 1, row["id"])
+    else:
+        await pool.execute("INSERT INTO bots (name, product, key_hash, public) VALUES ($1, $2, $3, $4)",
+                           name, product, _key_hash(key), 0 if data.get("public") is False else 1)
+    await refresh_bots_cache()
+    invalidate_site_cache()
+    return web.json_response({"ok": True, "name": name, "key": key, "updated": bool(row)}, headers=nostore)
+
+
+async def api_admin_uptime(request: web.Request) -> web.Response:
+    nostore = {"Cache-Control": "no-store"}
+    if pool is None or not await _admin_ok(request):
+        return web.json_response({"ok": False}, status=403, headers=nostore)
+    try:
+        data = await request.json()
+    except Exception:
+        data = {}
+    name, url = str(data.get("name") or "").strip()[:40], str(data.get("url") or "").strip()
+    if not name or not re.match(r"^https?://[^\s/$.?#][^\s]*$", url, re.I) or len(url) > 200:
+        return web.json_response({"ok": False, "error": "name/url ungültig"}, status=400, headers=nostore)
+    extra = [t for t in (_mon.get("extra") or []) if t["name"].lower() != name.lower()]
+    if len(extra) >= MAX_EXTRA_TARGETS:
+        return web.json_response({"ok": False, "error": "zu viele Dienste"}, status=400, headers=nostore)
+    extra.append({"name": name, "url": url})
+    _mon["extra"] = extra
+    await save_monitor()
+    return web.json_response({"ok": True, "name": name}, headers=nostore)
 
 
 # ---------- Befehle ----------
@@ -4157,7 +4263,6 @@ async def build_site_stats() -> dict:
         "invite": DISCORD_INVITE_URL,
         "discord": {"members": _site["members"], "online": _site["online"]},
         "system": system_summary(),
-        "bots": {"online": _bots_cache["online"], "total": _bots_cache["total"], "list": _bots_cache["list"]},
         "projects": {"running": running, "active": active, "paused": c["paused"],
                      "requests": new_requests, "done": c["archived"]},
         "workload": {"active": active, "capacity": MAX_PARALLEL, "percent": percent, "label": label,
@@ -4264,6 +4369,8 @@ async def start_website():
     app = web.Application(middlewares=[site_middleware])
     app.router.add_get("/api/stats", api_stats)
     app.router.add_post("/api/heartbeat", api_heartbeat)
+    app.router.add_post("/api/admin/bots", api_admin_bots)
+    app.router.add_post("/api/admin/uptime", api_admin_uptime)
     app.router.add_get("/health", site_health)
     app.router.add_get("/robots.txt", site_robots)
     app.router.add_get("/sitemap.xml", site_sitemap)
@@ -4329,6 +4436,15 @@ async def on_ready():
     print(f"VOLT online als {bot.user} ({bot.user.id})")
     # Bot-Status: Website als dauerhafte Werbung, bei Wartung/Störung mit Hinweis
     await apply_presence()
+    # Nach einem Update mit neuen Panels: einmal automatisch neu posten (wie /panels)
+    try:
+        g = main_guild()
+        if g and await get_setting("panels_version") != PANELS_VERSION:
+            await set_setting("panels_version", PANELS_VERSION)
+            await post_panels(g)
+            print(f"Panels automatisch neu gepostet (Version {PANELS_VERSION}).")
+    except Exception as ex:
+        print("Panels automatisch posten fehlgeschlagen:", repr(ex))
     if not GUILD_ID and not _cleaned_guild_commands:
         # Ohne GUILD_ID laufen die Befehle global: alte Server-Befehle vom alten Bot entfernen
         _cleaned_guild_commands = True

@@ -1,31 +1,23 @@
 """
 VOLT – Datei für JEDEN VOLT-Bot
 ===============================
-Macht zwei Dinge:
-  1) Status an VoltStudio.work melden (Bot erscheint auf der Website und im Uptime-Kanal)
-  2) VOLT-Werbung: Fußzeile, Bot-Status, /volt-Befehl (alles freiwillig)
+EINBAUEN: Datei neben die bot.py legen und direkt nach dem Erstellen des Bots:
 
-EINBAUEN (3 Schritte)
----------------------
-1. Diese Datei neben die bot.py des Bots legen.
+    from volt_credit import volt_start
+    bot = commands.Bot(...)          # (oder discord.Client(...)) – gibt es schon
+    volt_start(bot)                  # <- neu
 
-2. In Railway beim Bot die Variable anlegen:
-       VOLT_STATUS_KEY = <Schlüssel>
-   Den Schlüssel bekommst du im VOLT-Discord mit:  /bots hinzufügen
-
-3. In der bot.py EINE Zeile ergänzen, direkt nachdem der Bot erstellt wurde:
-
-       from volt_credit import volt_start
-       bot = commands.Bot(...)          # (oder discord.Client(...)) – gibt es schon
-       volt_start(bot)                  # <- neu
-
-   Fertig. Nach dem Neustart steht im Railway-Log:
-       [VOLT] Status aktiv: <Name> meldet sich jede Minute bei VoltStudio.work
+Was dann passiert:
+  1) VOLT-Werbung im Bot-Status: Der Bot zeigt abwechselnd seinen eigenen Status
+     (z. B. "Schaut ximtyron auf Twitch" oder LIVE) und "⚡ VoltStudio.work".
+     Hat der Bot keinen eigenen Status, steht dort dauerhaft "⚡ VoltStudio.work".
+     Ausschalten: volt_start(bot, werbung=False)
+  2) Optional (nur wenn die Railway-Variable VOLT_STATUS_KEY gesetzt ist):
+     Der Bot meldet jede Minute privat an VOLT ADMIN, dass er läuft.
+     Gesendet werden nur Bot-ID, Bot-Name, Anzahl Server, Ping und Laufzeit.
 
 Es ist egal, ob volt_start oben in der Datei, im setup_hook oder im on_ready steht.
-Mehrfaches Aufrufen startet keine zweite Meldung.
-Gesendet werden nur: Bot-ID und Bot-Name, Anzahl Server, Ping, Laufzeit.
-Keine Nachrichten, keine Mitglieder, keine Tokens.
+Mehrfaches Aufrufen startet nichts doppelt.
 
 OPTIONAL: VOLT-Werbung
 ----------------------
@@ -51,7 +43,10 @@ VOLT_INVITE = "https://discord.gg/RpUtNGT6uj"
 VOLT_FOOTER = f"⚡ made by VOLT · {VOLT_LABEL}"
 VOLT_COLOR = 0xFF1F2A
 VOLT_STATUS_URL = os.environ.get("VOLT_STATUS_URL", f"{VOLT_URL}/api/heartbeat")
-VOLT_STATUS_VERSION = "1.1"
+VOLT_STATUS_VERSION = "1.2"
+VOLT_AD_TEXT = f"⚡ {VOLT_LABEL}"
+VOLT_AD_SECONDS = 20      # so lange steht die VOLT-Werbung im Status ...
+VOLT_OWN_SECONDS = 40     # ... und so lange der eigene Status des Bots (z. B. Twitch)
 
 # Für das Feld „Über mich“ (Description) im Developer Portal, max. 400 Zeichen
 VOLT_ABOUT = (
@@ -64,13 +59,11 @@ VOLT_ABOUT = (
 # =====================================================================
 # 1) STATUS AN VOLTSTUDIO.WORK
 # =====================================================================
-def volt_start(bot: discord.Client, key: str = None, *, interval: int = 60):
-    """Startet die Statusmeldung. Den Schlüssel liest die Funktion aus VOLT_STATUS_KEY (Railway-Variable)."""
+def volt_start(bot: discord.Client, key: str = None, *, interval: int = 60, werbung: bool = True):
+    """Startet VOLT-Werbung im Bot-Status und (mit VOLT_STATUS_KEY) die private Statusmeldung."""
+    if werbung:
+        _install_presence_hook(bot)
     key = (key or os.environ.get("VOLT_STATUS_KEY", "")).strip()
-    if not key:
-        print("[VOLT] Status AUS: Railway-Variable VOLT_STATUS_KEY fehlt. "
-              "Schlüssel bekommst du im VOLT-Discord mit /bots hinzufügen.")
-        return None
     interval = max(30, int(interval))
     try:
         loop = asyncio.get_running_loop()
@@ -84,15 +77,72 @@ def volt_start(bot: discord.Client, key: str = None, *, interval: int = 60):
         original_login = bot.login
 
         async def _login(*args, **kwargs):
-            volt_start(bot, key, interval=interval)
+            volt_start(bot, key, interval=interval, werbung=werbung)
             return await original_login(*args, **kwargs)
         bot.login = _login
         return None
+    if werbung:
+        ptask = getattr(bot, "_volt_presence_task", None)
+        if ptask is None or ptask.done():
+            bot._volt_presence_task = loop.create_task(_volt_presence_loop(bot))
+    if not key:
+        return getattr(bot, "_volt_presence_task", None)
     task = getattr(bot, "_volt_status_task", None)
     if task is not None and not task.done():
         return task
     bot._volt_status_task = loop.create_task(_volt_loop(bot, key, interval))
     return bot._volt_status_task
+
+
+# ---------------------------------------------------------------------
+# VOLT-Werbung im Bot-Status (wechselt mit dem eigenen Status des Bots)
+# ---------------------------------------------------------------------
+def _ad_activity():
+    if hasattr(discord, "CustomActivity") and discord.version_info >= (2, 3):
+        return discord.CustomActivity(name=VOLT_AD_TEXT)
+    return discord.Game(name=VOLT_LABEL)
+
+
+def _install_presence_hook(bot):
+    """Merkt sich jeden Status, den der Bot selbst setzt (z. B. Twitch LIVE), damit er nicht verloren geht."""
+    if getattr(bot, "_volt_orig_presence", None) is not None:
+        return
+    original = bot.change_presence
+    bot._volt_orig_presence = original
+    bot._volt_own = {"activity": getattr(bot, "activity", None), "status": None}
+
+    async def change_presence(*, activity=None, status=None, **kwargs):
+        bot._volt_own = {"activity": activity, "status": status}
+        return await original(activity=activity, status=status, **kwargs)
+    bot.change_presence = change_presence
+
+
+async def _volt_presence_loop(bot):
+    await bot.wait_until_ready()
+    await asyncio.sleep(8)  # eigener Status des Bots (on_ready) zuerst
+    showing_ad = False
+    while not bot.is_closed():
+        own = getattr(bot, "_volt_own", {}) or {}
+        has_own = own.get("activity") is not None
+        try:
+            if not has_own:
+                if not showing_ad:  # kein eigener Status: Werbung einmal setzen und stehen lassen
+                    await bot._volt_orig_presence(activity=_ad_activity(), status=own.get("status"))
+                    showing_ad = True
+                await asyncio.sleep(VOLT_OWN_SECONDS)
+                continue
+            if showing_ad:
+                await bot._volt_orig_presence(activity=own["activity"], status=own.get("status"))
+                showing_ad = False
+                await asyncio.sleep(VOLT_OWN_SECONDS)
+            else:
+                await bot._volt_orig_presence(activity=_ad_activity(), status=own.get("status"))
+                showing_ad = True
+                await asyncio.sleep(VOLT_AD_SECONDS)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            await asyncio.sleep(VOLT_OWN_SECONDS)
 
 
 def _ping_ms(bot):
