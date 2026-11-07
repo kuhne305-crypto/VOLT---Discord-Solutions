@@ -60,7 +60,7 @@ VOLT_SYSTEM_PARTS = ("Compute", "Networking — Public", "Networking — Private
 # Optional: Schlüssel für die Verwaltung per HTTP (Bots anlegen, Dienste überwachen). Leer = aus.
 ADMIN_API_KEY = os.environ.get("VOLT_ADMIN_KEY", "").strip()
 # Wird diese Nummer erhöht, postet der Bot nach dem nächsten Start einmal alle Panels neu (wie /panels).
-PANELS_VERSION = "2026-10-31c"
+PANELS_VERSION = "2026-11-08a"
 
 MIN_ACCOUNT_AGE_DAYS = int(os.environ.get("MIN_ACCOUNT_AGE_DAYS", "3"))  # 0 = aus
 RAID_JOINS = int(os.environ.get("RAID_JOINS", "6"))      # so viele Joins ...
@@ -214,6 +214,7 @@ STRUCTURE = [
         ("🛒│bestellen", "text"),
     ]),
     ("━━━━━ 🟡 OFFENE TICKETS ━━━━━", "ticket", []),
+    ("━━━━━ 🕓 WARTELISTE ━━━━━", "ticket", []),
     ("━━━━━ 🔵 IN BEARBEITUNG ━━━━━", "ticket", []),
     ("━━━━━ 🟢 LAUFENDE PROJEKTE ━━━━━", "ticket", []),
     ("━━━━━ 🟠 WARTUNG ━━━━━", "ticket", []),
@@ -229,7 +230,7 @@ STRUCTURE = [
         ("🚪│join-leave-logs", "text"),
     ]),
 ]
-TICKET_CATEGORY_KEYS = ("OFFENE TICKETS", "IN BEARBEITUNG", "LAUFENDE PROJEKTE", "WARTUNG", "ARCHIV")
+TICKET_CATEGORY_KEYS = ("OFFENE TICKETS", "WARTELISTE", "IN BEARBEITUNG", "LAUFENDE PROJEKTE", "WARTUNG", "ARCHIV")
 
 
 def find_channel(guild: discord.Guild, key: str, kind=discord.TextChannel):
@@ -539,6 +540,7 @@ async def request_review(guild: discord.Guild, channel, ticket, *, dm: bool = Tr
 STATUS = {
     "open":        ("🟡", "OFFENE TICKETS", "Offen"),
     "offered":     ("🟡", "OFFENE TICKETS", "Angebot gesendet"),
+    "waiting":     ("🕓", "WARTELISTE", "Warteliste (anderer Server)"),
     "progress":    ("🔵", "IN BEARBEITUNG", "Angenommen / in Bearbeitung"),
     "running":     ("🟢", "LAUFENDE PROJEKTE", "Läuft"),
     "maintenance": ("🟠", "WARTUNG", "In Wartungsmodus"),
@@ -547,6 +549,7 @@ STATUS = {
     "archived":    ("📦", "ARCHIV", "Archiviert"),
 }
 STATUS_TEXT = {
+    "waiting": "Deine Anfrage steht auf der Warteliste. Narco City hat Vorrang, du rückst automatisch nach.",
     "progress": "Dein Projekt wurde angenommen und wird jetzt bearbeitet.",
     "running": "Dein Projekt ist live und läuft.",
     "maintenance": "Dein Projekt befindet sich im Wartungsmodus.",
@@ -693,12 +696,16 @@ class VerifyView(discord.ui.View):
 # FAQ
 # ===============================================================
 FAQ = {
-    "Was kostet das?": "**Nichts.** Alles bei VOLT ist kostenlos. Wenn du zufrieden bist, freue ich mich über eine "
-                       "freiwillige Spende. Spenden klären wir direkt hier auf Discord, schreib dazu einfach in dein Ticket. 💛",
+    "Was kostet das?": "Für Familien und Fraktionen auf **Narco City** ist alles **kostenlos**. Wenn du zufrieden bist, "
+                       "freue ich mich über eine freiwillige Spende, die klären wir direkt im Ticket. 💛\n\n"
+                       "Anfragen von **anderen Servern** kommen auf die Warteliste. Narco City hat Vorrang, "
+                       "die Konditionen klären wir, sobald du dran bist.",
     "Welche Produkte gibt es?": "👪 **Familien-Dashboard** (All-in-One)\n⚽ **Fussball-Manager**\n🗺️ **Routen-System**\n\n"
                                 f"Alle mit Vorschau zum Durchklicken auf **{SITE_LABEL}** und im Produkte-Kanal.",
-    "Wie läuft eine Bestellung ab?": "1) In #bestellen dein Produkt auswählen\n2) Ich prüfe deine Anfrage und schicke dir eine Bestätigung\n"
-                                     "3) Du bestätigst oder lehnst ab\n4) Dein Projekt wird umgesetzt, du siehst den Status am Channel-Symbol.",
+    "Wie läuft eine Bestellung ab?": "1) In #bestellen dein Produkt auswählen\n2) Angeben, ob du von Narco City kommst und ob ihr "
+                                     "schon einen Discord-Server habt\n3) Kurzen Fragebogen ausfüllen (Familie, Ränge, Funktionen)\n"
+                                     "4) Ich prüfe deine Anfrage und schicke dir eine Bestätigung\n5) Du bestätigst oder lehnst ab\n"
+                                     "6) Dein Projekt wird umgesetzt, du siehst den Status am Channel-Symbol.",
     "Wo sehe ich, ob alles läuft?": "Im Uptime-Kanal hier auf Discord und im Live-Status auf der Website. "
                                     "Dort steht, ob alle Systeme erreichbar sind, ob gerade Wartung ist oder eine Störung.",
     "Bekomme ich Bescheid, wenn das Team antwortet?": "Ja. Sobald jemand aus dem Team in deinem Ticket schreibt, bekommst du "
@@ -708,7 +715,10 @@ FAQ = {
     "Wer sieht mein Ticket?": "Nur du und der Owner/Admin. Kein anderer User, auch keine Kunden.",
     "Was darf ich NICHT ins Ticket schreiben?": "Schicke **nie** deinen Bot-Token, Passwörter oder Zahlungsdaten. "
                                                 "Für Zugänge sprechen wir einen sicheren Weg ab.",
-    "Für wen ist das Angebot?": "Für Familien und Communities, die ihren Discord mit Dashboard und eigenem Bot organisieren wollen.",
+    "Für wen ist das Angebot?": "Für Familien und Fraktionen auf **Narco City**, die ihren Discord mit Dashboard und eigenem Bot "
+                                "organisieren wollen. Andere Server kommen auf die Warteliste.",
+    "Was ist die Warteliste?": "Anfragen von anderen Servern landen in der Warteliste. Sind alle Narco-City-Anfragen bearbeitet, "
+                               "rückt die älteste automatisch nach und du bekommst eine DM. Deinen Platz siehst du in deinem Ticket.",
 }
 
 
@@ -727,22 +737,102 @@ class FaqView(discord.ui.View):
 # ===============================================================
 # TICKET: OEFFNEN
 # ===============================================================
-class TicketModal(discord.ui.Modal, title="Neue Anfrage"):
-    pname = discord.ui.TextInput(label="Name eurer Familie / eures Projekts", max_length=40,
-                                 placeholder="wird zum Namen deines Ticket-Kanals")
-    desc = discord.ui.TextInput(label="Was braucht ihr? Wünsche", style=discord.TextStyle.paragraph,
-                                max_length=1000, placeholder="z. B. Ränge, Kanäle, Farben, besondere Systeme …")
-    platform = discord.ui.TextInput(label="Server / Community (optional)", required=False, max_length=50,
-                                    placeholder="z. B. euer RP-Server")
-    link = discord.ui.TextInput(label="Einladung zu eurem Discord (optional)", required=False, max_length=200)
-    budget = discord.ui.TextInput(label="Spende (optional, klären wir auf Discord)",
-                                  required=False, max_length=60)
+def is_other_server(ticket) -> bool:
+    """Anfrage von außerhalb Narco City (Warteliste, nicht kostenlos)."""
+    return (ticket["platform"] or "").startswith("Anderer Server")
 
+
+async def waitlist_category(guild: discord.Guild):
+    """Kategorie für die Warteliste; wird bei Bedarf unter OFFENE TICKETS angelegt."""
+    cat = find_category(guild, "WARTELISTE")
+    if cat:
+        return cat
+    anchor = find_category(guild, "OFFENE TICKETS")
+    kw = {"position": anchor.position + 1} if anchor else {}
+    try:
+        return await guild.create_category("━━━━━ 🕓 WARTELISTE ━━━━━", overwrites=build_overwrites(guild, "ticket"),
+                                           reason="VOLT Warteliste", **kw)
+    except discord.HTTPException:
+        return anchor
+
+
+async def waitlist_position(ticket_id: int) -> int:
+    return int(await pool.fetchval(
+        "SELECT count(*) FROM tickets WHERE status='waiting' AND id<=$1", ticket_id) or 1)
+
+
+class TicketPrecheckView(discord.ui.View):
+    """Vor dem Fragebogen: Narco City oder anderer Server, Discord-Server vorhanden?"""
     def __init__(self, ptype: str):
-        super().__init__()
+        super().__init__(timeout=600)
         self.ptype = ptype
+        self.nc = None
+        self.has_server = None
+
+    @staticmethod
+    def _mark(select: discord.ui.Select):
+        for o in select.options:
+            o.default = o.value == select.values[0]
+
+    @discord.ui.select(placeholder="🌍 Woher kommst du?", row=0, options=[
+        discord.SelectOption(label="Narco City", value="nc", emoji="🌴",
+                             description="Für Narco City ist alles kostenlos"),
+        discord.SelectOption(label="Anderer Server", value="other", emoji="🌐",
+                             description="Kommt auf die Warteliste, Narco City hat Vorrang")])
+    async def origin(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.nc = select.values[0] == "nc"
+        self._mark(select)
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.select(placeholder="💬 Habt ihr schon einen Discord-Server?", row=1, options=[
+        discord.SelectOption(label="Ja, haben wir", value="yes", emoji="✅"),
+        discord.SelectOption(label="Nein, brauchen wir auch", value="no", emoji="🆕",
+                             description="Der Server wird mit eingerichtet")])
+    async def server(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.has_server = select.values[0] == "yes"
+        self._mark(select)
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label="Weiter zum Fragebogen", emoji="📝", style=discord.ButtonStyle.primary, row=2)
+    async def go(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.nc is None or self.has_server is None:
+            return await interaction.response.send_message("❌ Bitte beantworte erst beide Fragen.", ephemeral=True)
+        if not await ticket_allowed(interaction):
+            return
+        await interaction.response.send_modal(TicketModal(self.ptype, self.nc, self.has_server))
+
+
+def precheck_embed(ptype: str) -> discord.Embed:
+    return emb(f"📝 Anfrage: {ptype}",
+               "Kurz vorab, damit deine Anfrage schnell bearbeitet werden kann:\n\n"
+               "🌴 **Narco City:** alles kostenlos\n"
+               "🌐 **Anderer Server:** kommt auf die Warteliste, Narco City hat Vorrang\n\n"
+               "Beantworte beide Fragen und klick dann auf **Weiter zum Fragebogen**.")
+
+
+class TicketModal(discord.ui.Modal):
+    def __init__(self, ptype: str, nc: bool, has_server: bool):
         prod = product_by_label(ptype)
-        self.title = f"Anfrage: {prod['name']}" if prod else "Individuelle Anfrage"
+        super().__init__(title=(f"Anfrage: {prod['name']}" if prod else "Individuelle Anfrage")[:45])
+        self.ptype, self.nc, self.has_server = ptype, nc, has_server
+        self.pname = discord.ui.TextInput(label="Name eurer Familie / eures Projekts", max_length=40,
+                                          placeholder="wird zum Namen deines Ticket-Kanals")
+        self.who = discord.ui.TextInput(
+            label="Dein Ingame-Name auf Narco City" if nc else "Welcher Server / welche Community?",
+            max_length=50, placeholder="Vor- und Nachname ingame" if nc else "z. B. Name eures RP-Servers")
+        self.ranks = discord.ui.TextInput(label="Eure Ränge (von oben nach unten)", style=discord.TextStyle.paragraph,
+                                          max_length=500, placeholder="z. B. Boss, Underboss, Capo, Member, Prospect")
+        self.desc = discord.ui.TextInput(label="Welche Funktionen braucht ihr? Wünsche",
+                                         style=discord.TextStyle.paragraph, max_length=1000,
+                                         placeholder="z. B. Kasse, Wochenabgaben, Lager, Sanktionen, Termine – oder alles")
+        if has_server:
+            self.link = discord.ui.TextInput(label="Einladung zu eurem Discord", max_length=200,
+                                             placeholder="discord.gg/…")
+        else:
+            self.link = discord.ui.TextInput(label="Wünsche für euren neuen Discord (optional)", required=False,
+                                             max_length=300, placeholder="z. B. Name, Farben, Kanäle")
+        for item in (self.pname, self.who, self.ranks, self.desc, self.link):
+            self.add_item(item)
 
     async def on_submit(self, interaction: discord.Interaction):
         guild, member = interaction.guild, interaction.user
@@ -756,35 +846,101 @@ class TicketModal(discord.ui.Modal, title="Neue Anfrage"):
                 f"❌ Du hast schon {n} offene Tickets (Maximum {MAX_OPEN_TICKETS}).", ephemeral=True)
 
         slug = slugify(self.pname.value)
-        cat = find_category(guild, "OFFENE TICKETS")
+        platform = "Narco City" if self.nc else f"Anderer Server: {self.who.value}"[:80]
+        desc = self.desc.value
+        link = self.link.value if self.has_server else None
+        if not self.has_server and self.link.value:
+            desc += f"\n\nWünsche für den neuen Discord: {self.link.value}"
+        status = "open" if self.nc else "waiting"
+        if self.nc:
+            cat, emoji = find_category(guild, "OFFENE TICKETS"), "🟡"
+        else:
+            cat, emoji = await waitlist_category(guild), "🕓"
         channel = await guild.create_text_channel(
-            f"🟡│{slug}", category=cat, overwrites=ticket_overwrites(guild, member),
-            topic=f"Ticket von {member} | {self.ptype}", reason="VOLT Ticket")
+            f"{emoji}│{slug}", category=cat, overwrites=ticket_overwrites(guild, member),
+            topic=f"Ticket von {member} | {self.ptype} | {platform}", reason="VOLT Ticket")
         tid = await pool.fetchval(
             """INSERT INTO tickets (channel_id,user_id,project_type,project_name,slug,description,
-               platform,link,budget,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'open') RETURNING id""",
-            channel.id, member.id, self.ptype, self.pname.value, slug, self.desc.value,
-            self.platform.value or None, self.link.value or None, self.budget.value or None)
+               platform,link,budget,status,ingame,ranks,has_discord)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id""",
+            channel.id, member.id, self.ptype, self.pname.value, slug, desc,
+            platform, link, None, status, self.who.value if self.nc else None, self.ranks.value,
+            "ja" if self.has_server else "nein")
         invalidate_site_cache()
 
         prod = product_by_label(self.ptype)
-        e = emb(f"🎫 Ticket #{tid} – {self.pname.value}", color=0xF1C40F)
+        e = emb(f"{emoji} Ticket #{tid} – {self.pname.value}", color=0xF1C40F if self.nc else 0x95A5A6)
         e.add_field(name="Produkt", value=self.ptype, inline=True)
-        e.add_field(name="Server / Community", value=self.platform.value or "–", inline=True)
-        e.add_field(name="Discord-Einladung", value=self.link.value or "–", inline=False)
-        e.add_field(name="Spende", value=self.budget.value or "–", inline=True)
+        e.add_field(name="Herkunft", value="🌴 Narco City" if self.nc else f"🌐 {self.who.value}", inline=True)
+        if self.nc:
+            e.add_field(name="Ingame-Name", value=self.who.value, inline=True)
+        e.add_field(name="Discord-Server", value=(f"✅ vorhanden · {link}" if self.has_server
+                                                  else "🆕 wird mit eingerichtet"), inline=False)
+        e.add_field(name="Ränge", value=self.ranks.value[:1024], inline=False)
+        e.add_field(name="Funktionen & Wünsche", value=desc[:1024], inline=False)
         e.add_field(name="Von", value=member.mention, inline=True)
-        e.add_field(name="Wünsche", value=self.desc.value, inline=False)
         if prod:
             e.add_field(name="🔎 Vorschau", value=f"[{prod['name']} ansehen]({product_url(prod['key'])})", inline=False)
-        await channel.send(
-            content=f"<@{OWNER_ID}> {member.mention}\nDeine Anfrage ist eingegangen. "
-                    f"Du bekommst hier eine Bestätigung, sobald sie geprüft wurde. "
-                    f"Antwortet das Team, bekommst du eine DM.",
-            embed=e, view=AdminPanelView())
-        await interaction.followup.send(f"✅ Dein Ticket wurde erstellt: {channel.mention}", ephemeral=True)
-        await log(guild, "ticket-logs", emb("🟡 Ticket geöffnet",
-                                            f"#{tid} · {self.pname.value} · {member.mention}\n{channel.mention}"))
+
+        if self.nc:
+            await channel.send(
+                content=f"<@{OWNER_ID}> {member.mention}\nDeine Anfrage ist eingegangen. "
+                        f"Du bekommst hier eine Bestätigung, sobald sie geprüft wurde. "
+                        f"Antwortet das Team, bekommst du eine DM.",
+                embed=e, view=AdminPanelView())
+            await interaction.followup.send(f"✅ Dein Ticket wurde erstellt: {channel.mention}", ephemeral=True)
+            await log(guild, "ticket-logs", emb("🟡 Ticket geöffnet",
+                                                f"#{tid} · {self.pname.value} · {member.mention}\n{channel.mention}"))
+        else:
+            pos = await waitlist_position(tid)
+            await channel.send(
+                content=f"{member.mention}\n🕓 **Du stehst auf der Warteliste (Platz {pos}).**\n"
+                        f"VOLT-Systeme sind nur für Narco City kostenlos, Narco City hat deshalb Vorrang. "
+                        f"Sobald ein Platz frei ist, rückt dein Ticket automatisch nach und du bekommst eine DM. "
+                        f"Die Konditionen klären wir dann hier im Ticket.",
+                embed=e, view=AdminPanelView())
+            await interaction.followup.send(
+                f"🕓 Du stehst auf der Warteliste (Platz {pos}): {channel.mention}", ephemeral=True)
+            await log(guild, "ticket-logs", emb("🕓 Warteliste",
+                                                f"#{tid} · {self.pname.value} · {member.mention} · {platform}\n"
+                                                f"{channel.mention} · Platz {pos}", 0x95A5A6))
+
+
+async def release_waitlist(guild: discord.Guild):
+    """Sind alle neuen Anfragen bearbeitet, rückt die älteste von der Warteliste nach."""
+    if await pool.fetchval("SELECT count(*) FROM tickets WHERE status='open'"):
+        return
+    t = await pool.fetchrow("SELECT * FROM tickets WHERE status='waiting' ORDER BY id LIMIT 1")
+    if not t:
+        return
+    ch = guild.get_channel(t["channel_id"])
+    if ch is None:  # Kanal wurde von Hand gelöscht
+        await pool.execute("UPDATE tickets SET status='deleted' WHERE id=$1", t["id"])
+        return
+    await apply_status(guild, ch, t, "open")
+    member = guild.get_member(t["user_id"])
+    await ch.send(content=f"<@{OWNER_ID}> {member.mention if member else ''}",
+                  embed=emb("✅ Du bist dran!",
+                            "Ein Platz ist frei geworden. Deine Anfrage wird jetzt geprüft, "
+                            "du bekommst hier eine Bestätigung mit den Konditionen.", 0x2ECC71))
+    await notify_ticket_owner(guild, t, "✅ Du bist dran",
+                              f"Deine Anfrage **{t['project_name']}** ist von der Warteliste nachgerückt.", force=True)
+    await log(guild, "ticket-logs", emb("🟡 Von der Warteliste nachgerückt", f"#{t['id']} · {t['project_name']}"))
+
+
+@tasks.loop(minutes=5)
+async def waitlist_loop():
+    g = main_guild()
+    if g:
+        try:
+            await release_waitlist(g)
+        except Exception as ex:
+            print("Warteliste:", repr(ex))
+
+
+@waitlist_loop.before_loop
+async def _waitlist_wait():
+    await bot.wait_until_ready()
 
 
 def product_options():
@@ -817,7 +973,9 @@ class ProjectSelect(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         if not await ticket_allowed(interaction):
             return
-        await interaction.response.send_modal(TicketModal(PROJECT_TYPES[int(self.values[0])]))
+        ptype = PROJECT_TYPES[int(self.values[0])]
+        await interaction.response.send_message(embed=precheck_embed(ptype), view=TicketPrecheckView(ptype),
+                                                ephemeral=True)
 
 
 class ProjectSelectView(discord.ui.View):
@@ -857,9 +1015,14 @@ class PriceModal(discord.ui.Modal, title="Projekt annehmen"):
     price = discord.ui.TextInput(label="Kosten (Standard: kostenlos)",
                                  default="kostenlos", max_length=60)
 
-    def __init__(self, ticket_id: int):
+    def __init__(self, ticket_id: int, paid: bool = False):
         super().__init__()
         self.ticket_id = ticket_id
+        self.paid = paid
+        if paid:  # anderer Server: nicht kostenlos, Preis wird eingetragen
+            self.price.label = "Kosten (anderer Server, nicht kostenlos)"
+            self.price.default = None
+            self.price.placeholder = "z. B. 20 €"
 
     async def on_submit(self, interaction: discord.Interaction):
         ticket = await get_ticket(interaction.channel.id)
@@ -868,8 +1031,11 @@ class PriceModal(discord.ui.Modal, title="Projekt annehmen"):
         e = emb("💼 Bestätigung für dein Projekt",
                 f"**Projekt:** {ticket['project_name']}\n**Kosten:** {self.price.value}\n\n"
                 f"Bestätige, um zu starten, oder lehne ab.\n"
-                f"Alles ist kostenlos – Spenden sind freiwillig. 💛")
+                + ("Für Server außerhalb von Narco City ist das Angebot nicht kostenlos."
+                   if self.paid else "Für Narco City ist alles kostenlos – Spenden sind freiwillig. 💛"))
         await interaction.response.defer(ephemeral=True)
+        if ticket["status"] == "waiting":  # direkt aus der Warteliste angenommen
+            await apply_status(interaction.guild, interaction.channel, ticket, "open")
         msg = await interaction.channel.send(
             content=f"<@{ticket['user_id']}>", embed=e, view=OfferView())
         await pool.execute("UPDATE tickets SET price=$1, status='offered', offer_message_id=$2 WHERE id=$3",
@@ -923,7 +1089,7 @@ async def change_status(interaction: discord.Interaction, status: str):
     if not ticket:
         return await interaction.response.send_message("❌ Kein Ticket in der Datenbank.", ephemeral=True)
     prev = ticket["status"]
-    if status in ("running", "maintenance", "paused") and prev in ("open", "offered", "rejected"):
+    if status in ("running", "maintenance", "paused") and prev in ("open", "offered", "rejected", "waiting"):
         return await interaction.response.send_message(
             "❌ Erst muss der Kunde das Angebot bestätigen.", ephemeral=True)
 
@@ -980,10 +1146,10 @@ class AdminPanelView(discord.ui.View):
                        custom_id="volt:t:accept", row=0)
     async def accept(self, interaction, button):
         ticket = await get_ticket(interaction.channel.id)
-        if not ticket or ticket["status"] not in ("open", "offered"):
+        if not ticket or ticket["status"] not in ("open", "offered", "waiting"):
             return await interaction.response.send_message(
                 "❌ Dieses Ticket ist schon angenommen oder geschlossen.", ephemeral=True)
-        await interaction.response.send_modal(PriceModal(ticket["id"]))
+        await interaction.response.send_modal(PriceModal(ticket["id"], paid=is_other_server(ticket)))
 
     @discord.ui.button(label="Läuft", emoji="🟢", style=discord.ButtonStyle.secondary,
                        custom_id="volt:t:running", row=0)
@@ -1338,7 +1504,8 @@ def order_embed(guild: discord.Guild) -> discord.Embed:
     e = emb("🛒 Bestellen",
             "Wähle unten dein Produkt aus und beschreib deine Wünsche. Dein Ticket sieht nur du und der Owner.\n\n"
             + "\n\n".join(lines) +
-            "\n\n💛 **Alles kostenlos.** Spenden sind freiwillig und werden im Ticket geklärt.")
+            "\n\n🌴 **Für Narco City kostenlos.** Spenden sind freiwillig und werden im Ticket geklärt.\n"
+            "🌐 **Andere Server** kommen auf die Warteliste, Narco City hat Vorrang.")
     return e
 
 
@@ -1351,7 +1518,7 @@ async def post_products_panel(guild: discord.Guild):
     head = emb("🛍️ Unsere Produkte",
                "Jedes Produkt besteht aus Dashboard und eigenem Discord-Bot und wird für eure Familie eingerichtet.\n"
                f"Zu jedem Produkt gibt es eine **Vorschau zum Durchklicken** auf **[{SITE_LABEL}]({SITE_URL}/#produkte)**.\n\n"
-               "💛 **Alles kostenlos** · Spenden freiwillig, klären wir auf Discord\n"
+               "🌴 **Für Narco City kostenlos** · Spenden freiwillig, klären wir auf Discord\n"
                + (f"🛒 Anfragen in {order.mention}" if order else "🛒 Anfragen per Ticket"))
     await ch.send(embed=head)
     for p in PRODUCTS:
@@ -1368,7 +1535,7 @@ async def post_website_panel(guild: discord.Guild):
             "🔎 **Alle Produkte** mit Vorschau zum Durchklicken\n"
             "👪 **Familien-Dashboard** mit klickbarer Demo\n"
             "⭐ **Bewertungen** von Kunden\n"
-            "🇩🇪 **Made in Germany** · alles kostenlos\n\n"
+            "🇩🇪 **Made in Germany** · für Narco City kostenlos\n\n"
             f"👉 **{SITE_URL}**")
     e.set_image(url=f"{SITE_URL}/assets/img/volt-banner-og.jpg")
     v = volt_link_view()
@@ -1664,7 +1831,7 @@ async def platz_cmd(interaction: discord.Interaction, nummer: app_commands.Choic
             f"Arbeitszeit bisher: **{fmt_dur(total)}**", ephemeral=True)
         return await log(interaction.guild, "ticket-logs", emb(
             "🧰 Platz frei", f"#{ticket['id']} · {ticket['project_name']} · bisher {fmt_dur(total)}"))
-    if ticket["status"] in ("open", "offered"):
+    if ticket["status"] in ("open", "offered", "waiting"):
         return await interaction.response.send_message(
             "❌ Erst muss der Kunde bestätigen, dann kommt das Projekt auf die Werkbank.", ephemeral=True)
     if ticket["status"] in ("archived", "rejected"):
@@ -1935,12 +2102,12 @@ async def review_delete_ctx(interaction: discord.Interaction, message: discord.M
 async def spenden_cmd(interaction: discord.Interaction):
     if DONATION_URL:
         return await interaction.response.send_message(
-            embed=emb("💛 Danke!", "Spenden sind komplett freiwillig und helfen, den Service kostenlos zu halten."),
+            embed=emb("💛 Danke!", "Spenden sind komplett freiwillig und helfen, den Service für Narco City kostenlos zu halten."),
             view=donate_view(), ephemeral=True)
     order = find_channel(interaction.guild, "bestellen") if interaction.guild else None
     await interaction.response.send_message(embed=emb(
         "💛 Danke, dass du unterstützen willst!",
-        "Alles bei VOLT ist kostenlos, Spenden sind komplett freiwillig.\n\n"
+        "Für Narco City ist bei VOLT alles kostenlos, Spenden sind komplett freiwillig.\n\n"
         "Spenden klären wir direkt hier auf Discord: Schreib einfach in dein Ticket"
         + (f" oder öffne in {order.mention} eine **Individuelle Anfrage**." if order else ".")), ephemeral=True)
 
@@ -3164,7 +3331,7 @@ async def security_status_cmd(interaction: discord.Interaction):
 @bot.tree.command(name="volt", description="Website und Produkte von VOLT")
 async def volt_cmd(interaction: discord.Interaction):
     e = emb("⚡ VOLT – Discord Solutions",
-            "Kostenlose Familien-Dashboards, Fussball-Manager und Routen-Systeme mit eigenem Discord-Bot. "
+            "Familien-Dashboards, Fussball-Manager und Routen-Systeme mit eigenem Discord-Bot, für Narco City kostenlos. "
             "Gebaut und betreut von einer Person, nur auf Spendenbasis.\n\n"
             f"🌐 **{SITE_LABEL}** – alle Produkte mit Vorschau und klickbarer Demo")
     await interaction.response.send_message(embed=e, view=volt_link_view(), ephemeral=True)
@@ -4387,7 +4554,7 @@ async def start_website():
 
 async def migrate_db():
     cols = {r[1] for r in await pool.fetch("PRAGMA table_info(tickets)")}
-    for col in ("accepted_at", "live_at"):
+    for col in ("accepted_at", "live_at", "ingame", "ranks", "has_discord"):
         if col not in cols:
             await pool.execute(f"ALTER TABLE tickets ADD COLUMN {col} TEXT")
     if "slot" not in cols:
@@ -4425,6 +4592,7 @@ async def setup_hook():
         print(f"{len(synced)} globale Befehle aktiv.")
     update_stats.start()
     uptime_monitor.start()
+    waitlist_loop.start()
 
 
 _cleaned_guild_commands = False
