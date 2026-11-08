@@ -753,3 +753,25 @@ section[id]{scroll-margin-top:84px}
 .botlist li small{font-size:.84rem;color:var(--muted);font-variant-numeric:tabular-nums}
 .sysrow-facts div[hidden]{display:none}
 .flag-big{display:block;width:48px;height:32px;border-radius:4px;background:linear-gradient(#111 0 33.4%,#dd0000 33.4% 66.7%,#ffce00 66.7%);box-shadow:0 0 0 1px rgba(255,255,255,.14),0 0 24px -6px rgba(255,31,42,.6)}
+
+/* VOLT Bot: Hinweis auf der Startseite, Menü-Markierung, Modul-Status */
+.drop em.new,.mtag{font:700 .62rem/1 var(--f-label);letter-spacing:.14em;text-transform:uppercase;font-style:normal;padding:.22rem .45rem;border-radius:99px;border:1px solid var(--line-2);color:var(--muted);vertical-align:.15em;margin-left:.35rem}
+.drop em.new{border-color:rgba(255,31,42,.55);color:var(--red-hot)}
+.mtag.live{border-color:rgba(46,204,113,.45);color:#5ee39a}
+.steps.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.botband{position:relative;border-top:1px solid var(--line);background:linear-gradient(100deg,rgba(255,31,42,.16),rgba(12,7,7,.6) 45%,var(--void));overflow:hidden}
+.botband-in{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:clamp(1rem,3vw,2rem);padding-block:clamp(1.8rem,4vw,2.6rem)}
+.botband-mark svg{width:clamp(56px,7vw,84px);height:auto;display:block;filter:drop-shadow(0 0 22px rgba(255,31,42,.45))}
+.botband-copy{display:grid;gap:.45rem;min-width:0}
+.botband h2{font-family:var(--f-display);font-style:italic;font-weight:900;font-stretch:118%;text-transform:uppercase;font-size:clamp(1.6rem,3.4vw,2.4rem);line-height:.98}
+.botband h2 span{color:var(--red)}
+.botband-copy p:not(.eyebrow){color:var(--soft);max-width:44em}
+.botband-cta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:.7rem}
+.botband-dash{flex-basis:100%;text-align:right;font:700 .82rem var(--f-label);letter-spacing:.14em;text-transform:uppercase;color:var(--red-hot);text-decoration:none}
+.botband-dash:hover{color:#fff}
+@media (max-width:900px){
+  .botband-in{grid-template-columns:auto minmax(0,1fr)}
+  .botband-cta{grid-column:1/-1;justify-content:flex-start}
+  .botband-dash{text-align:left}
+  .steps.three{grid-template-columns:minmax(0,1fr)}
+}
