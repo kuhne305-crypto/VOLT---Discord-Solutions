@@ -60,7 +60,7 @@ VOLT_SYSTEM_PARTS = ("Compute", "Networking — Public", "Networking — Private
 # Optional: Schlüssel für die Verwaltung per HTTP (Bots anlegen, Dienste überwachen). Leer = aus.
 ADMIN_API_KEY = os.environ.get("VOLT_ADMIN_KEY", "").strip()
 # Wird diese Nummer erhöht, postet der Bot nach dem nächsten Start einmal alle Panels neu (wie /panels).
-PANELS_VERSION = "2026-11-08a"
+PANELS_VERSION = "2026-11-08b"
 
 MIN_ACCOUNT_AGE_DAYS = int(os.environ.get("MIN_ACCOUNT_AGE_DAYS", "3"))  # 0 = aus
 RAID_JOINS = int(os.environ.get("RAID_JOINS", "6"))      # so viele Joins ...
@@ -214,7 +214,6 @@ STRUCTURE = [
         ("🛒│bestellen", "text"),
     ]),
     ("━━━━━ 🟡 OFFENE TICKETS ━━━━━", "ticket", []),
-    ("━━━━━ 🕓 WARTELISTE ━━━━━", "ticket", []),
     ("━━━━━ 🔵 IN BEARBEITUNG ━━━━━", "ticket", []),
     ("━━━━━ 🟢 LAUFENDE PROJEKTE ━━━━━", "ticket", []),
     ("━━━━━ 🟠 WARTUNG ━━━━━", "ticket", []),
@@ -340,7 +339,8 @@ CREATE TABLE IF NOT EXISTS warns (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, mod_id INTEGER, reason TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS blacklist (
-  user_id INTEGER PRIMARY KEY, reason TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+  user_id INTEGER PRIMARY KEY, reason TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  until INTEGER, mod_id INTEGER);
 CREATE TABLE IF NOT EXISTS stats (
   key TEXT PRIMARY KEY, value INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS reviews (
@@ -549,7 +549,7 @@ STATUS = {
     "archived":    ("📦", "ARCHIV", "Archiviert"),
 }
 STATUS_TEXT = {
-    "waiting": "Deine Anfrage steht auf der Warteliste. Narco City hat Vorrang, du rückst automatisch nach.",
+    "waiting": "Deine Anfrage steht auf der Warteliste.",
     "progress": "Dein Projekt wurde angenommen und wird jetzt bearbeitet.",
     "running": "Dein Projekt ist live und läuft.",
     "maintenance": "Dein Projekt befindet sich im Wartungsmodus.",
@@ -698,8 +698,7 @@ class VerifyView(discord.ui.View):
 FAQ = {
     "Was kostet das?": "Für Familien und Fraktionen auf **Narco City** ist alles **kostenlos**. Wenn du zufrieden bist, "
                        "freue ich mich über eine freiwillige Spende, die klären wir direkt im Ticket. 💛\n\n"
-                       "Anfragen von **anderen Servern** kommen auf die Warteliste. Narco City hat Vorrang, "
-                       "die Konditionen klären wir, sobald du dran bist.",
+                       "Anfragen von **anderen Servern** können wir leider nicht annehmen.",
     "Welche Produkte gibt es?": "👪 **Familien-Dashboard** (All-in-One)\n⚽ **Fussball-Manager**\n🗺️ **Routen-System**\n\n"
                                 f"Alle mit Vorschau zum Durchklicken auf **{SITE_LABEL}** und im Produkte-Kanal.",
     "Wie läuft eine Bestellung ab?": "1) In #bestellen dein Produkt auswählen\n2) Angeben, ob du von Narco City kommst und ob ihr "
@@ -715,10 +714,11 @@ FAQ = {
     "Wer sieht mein Ticket?": "Nur du und der Owner/Admin. Kein anderer User, auch keine Kunden.",
     "Was darf ich NICHT ins Ticket schreiben?": "Schicke **nie** deinen Bot-Token, Passwörter oder Zahlungsdaten. "
                                                 "Für Zugänge sprechen wir einen sicheren Weg ab.",
-    "Für wen ist das Angebot?": "Für Familien und Fraktionen auf **Narco City**, die ihren Discord mit Dashboard und eigenem Bot "
-                                "organisieren wollen. Andere Server kommen auf die Warteliste.",
-    "Was ist die Warteliste?": "Anfragen von anderen Servern landen in der Warteliste. Sind alle Narco-City-Anfragen bearbeitet, "
-                               "rückt die älteste automatisch nach und du bekommst eine DM. Deinen Platz siehst du in deinem Ticket.",
+    "Für wen ist das Angebot?": "Ausschließlich für Familien und Fraktionen auf **Narco City**, die ihren Discord mit "
+                                "Dashboard und eigenem Bot organisieren wollen. Andere Server können wir leider nicht annehmen.",
+    "Warum kann ich kein Ticket öffnen?": "Entweder hast du schon die maximale Anzahl offener Tickets oder du bist "
+                                          "vorübergehend gesperrt. Bei einer Sperre siehst du beim Öffnen, bis wann sie "
+                                          "gilt und warum.",
 }
 
 
@@ -742,25 +742,6 @@ def is_other_server(ticket) -> bool:
     return (ticket["platform"] or "").startswith("Anderer Server")
 
 
-async def waitlist_category(guild: discord.Guild):
-    """Kategorie für die Warteliste; wird bei Bedarf unter OFFENE TICKETS angelegt."""
-    cat = find_category(guild, "WARTELISTE")
-    if cat:
-        return cat
-    anchor = find_category(guild, "OFFENE TICKETS")
-    kw = {"position": anchor.position + 1} if anchor else {}
-    try:
-        return await guild.create_category("━━━━━ 🕓 WARTELISTE ━━━━━", overwrites=build_overwrites(guild, "ticket"),
-                                           reason="VOLT Warteliste", **kw)
-    except discord.HTTPException:
-        return anchor
-
-
-async def waitlist_position(ticket_id: int) -> int:
-    return int(await pool.fetchval(
-        "SELECT count(*) FROM tickets WHERE status='waiting' AND id<=$1", ticket_id) or 1)
-
-
 class TicketPrecheckView(discord.ui.View):
     """Vor dem Fragebogen: Narco City oder anderer Server, Discord-Server vorhanden?"""
     def __init__(self, ptype: str):
@@ -778,9 +759,16 @@ class TicketPrecheckView(discord.ui.View):
         discord.SelectOption(label="Narco City", value="nc", emoji="🌴",
                              description="Für Narco City ist alles kostenlos"),
         discord.SelectOption(label="Anderer Server", value="other", emoji="🌐",
-                             description="Kommt auf die Warteliste, Narco City hat Vorrang")])
+                             description="Leider nicht möglich, nur Narco City")])
     async def origin(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.nc = select.values[0] == "nc"
+        if select.values[0] == "other":
+            self.stop()
+            return await interaction.response.edit_message(view=None, embed=emb(
+                "🌴 Nur für Narco City",
+                "Sorry, VOLT betreut **ausschließlich Familien und Fraktionen von Narco City**. "
+                "Anfragen von anderen Servern können wir leider nicht annehmen.\n\n"
+                "Danke trotzdem für dein Interesse! 🙏", 0xE74C3C))
+        self.nc = True
         self._mark(select)
         await interaction.response.edit_message(view=self)
 
@@ -806,7 +794,7 @@ def precheck_embed(ptype: str) -> discord.Embed:
     return emb(f"📝 Anfrage: {ptype}",
                "Kurz vorab, damit deine Anfrage schnell bearbeitet werden kann:\n\n"
                "🌴 **Narco City:** alles kostenlos\n"
-               "🌐 **Anderer Server:** kommt auf die Warteliste, Narco City hat Vorrang\n\n"
+               "🌐 **Andere Server:** können wir leider nicht annehmen\n\n"
                "Beantworte beide Fragen und klick dann auf **Weiter zum Fragebogen**.")
 
 
@@ -815,18 +803,19 @@ class TicketModal(discord.ui.Modal):
         prod = product_by_label(ptype)
         super().__init__(title=(f"Anfrage: {prod['name']}" if prod else "Individuelle Anfrage")[:45])
         self.ptype, self.nc, self.has_server = ptype, nc, has_server
-        self.pname = discord.ui.TextInput(label="Name eurer Familie / eures Projekts", max_length=40,
+        self.pname = discord.ui.TextInput(label="Name eurer Familie / eures Projekts", min_length=2, max_length=40,
                                           placeholder="wird zum Namen deines Ticket-Kanals")
         self.who = discord.ui.TextInput(
             label="Dein Ingame-Name auf Narco City" if nc else "Welcher Server / welche Community?",
-            max_length=50, placeholder="Vor- und Nachname ingame" if nc else "z. B. Name eures RP-Servers")
+            min_length=3, max_length=50, placeholder="Vor- und Nachname ingame" if nc else "z. B. Name eures RP-Servers")
         self.ranks = discord.ui.TextInput(label="Eure Ränge (von oben nach unten)", style=discord.TextStyle.paragraph,
-                                          max_length=500, placeholder="z. B. Boss, Underboss, Capo, Member, Prospect")
+                                          min_length=5, max_length=500,
+                                          placeholder="z. B. Boss, Underboss, Capo, Member, Prospect")
         self.desc = discord.ui.TextInput(label="Welche Funktionen braucht ihr? Wünsche",
-                                         style=discord.TextStyle.paragraph, max_length=1000,
+                                         style=discord.TextStyle.paragraph, min_length=10, max_length=1000,
                                          placeholder="z. B. Kasse, Wochenabgaben, Lager, Sanktionen, Termine – oder alles")
         if has_server:
-            self.link = discord.ui.TextInput(label="Einladung zu eurem Discord", max_length=200,
+            self.link = discord.ui.TextInput(label="Einladung zu eurem Discord", min_length=8, max_length=200,
                                              placeholder="discord.gg/…")
         else:
             self.link = discord.ui.TextInput(label="Wünsche für euren neuen Discord (optional)", required=False,
@@ -836,6 +825,18 @@ class TicketModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         guild, member = interaction.guild, interaction.user
+        # Nur Punkte/Striche o. Ä. zählen nicht als Angabe
+        meaningful = lambda v: len(re.findall(r"[0-9A-Za-zÄÖÜäöüß]", v or "")) >= 2
+        fields = [("Familie", self.pname), ("Ingame-Name", self.who), ("Ränge", self.ranks), ("Funktionen", self.desc)]
+        if self.has_server:
+            fields.append(("Discord-Einladung", self.link))
+        bad = [n for n, f in fields if not meaningful(f.value)]
+        if self.has_server and not bad and not re.search(r"discord(app)?\.(gg|com)/", self.link.value, re.I):
+            bad.append("Discord-Einladung (Link wie discord.gg/…)")
+        if bad:
+            return await interaction.response.send_message(
+                "❌ Bitte fülle den Fragebogen richtig aus. Fehlt oder ungültig: **" + ", ".join(bad) + "**.\n"
+                "Wähl dein Produkt in #bestellen einfach noch einmal aus.", ephemeral=True)
         await interaction.response.defer(ephemeral=True)
 
         n = await pool.fetchval(
@@ -846,34 +847,28 @@ class TicketModal(discord.ui.Modal):
                 f"❌ Du hast schon {n} offene Tickets (Maximum {MAX_OPEN_TICKETS}).", ephemeral=True)
 
         slug = slugify(self.pname.value)
-        platform = "Narco City" if self.nc else f"Anderer Server: {self.who.value}"[:80]
         desc = self.desc.value
         link = self.link.value if self.has_server else None
         if not self.has_server and self.link.value:
             desc += f"\n\nWünsche für den neuen Discord: {self.link.value}"
-        status = "open" if self.nc else "waiting"
-        if self.nc:
-            cat, emoji = find_category(guild, "OFFENE TICKETS"), "🟡"
-        else:
-            cat, emoji = await waitlist_category(guild), "🕓"
+        cat = find_category(guild, "OFFENE TICKETS")
         channel = await guild.create_text_channel(
-            f"{emoji}│{slug}", category=cat, overwrites=ticket_overwrites(guild, member),
-            topic=f"Ticket von {member} | {self.ptype} | {platform}", reason="VOLT Ticket")
+            f"🟡│{slug}", category=cat, overwrites=ticket_overwrites(guild, member),
+            topic=f"Ticket von {member} | {self.ptype} | Narco City", reason="VOLT Ticket")
         tid = await pool.fetchval(
             """INSERT INTO tickets (channel_id,user_id,project_type,project_name,slug,description,
                platform,link,budget,status,ingame,ranks,has_discord)
                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id""",
             channel.id, member.id, self.ptype, self.pname.value, slug, desc,
-            platform, link, None, status, self.who.value if self.nc else None, self.ranks.value,
+            "Narco City", link, None, "open", self.who.value, self.ranks.value,
             "ja" if self.has_server else "nein")
         invalidate_site_cache()
 
         prod = product_by_label(self.ptype)
-        e = emb(f"{emoji} Ticket #{tid} – {self.pname.value}", color=0xF1C40F if self.nc else 0x95A5A6)
+        e = emb(f"🟡 Ticket #{tid} – {self.pname.value}", color=0xF1C40F)
         e.add_field(name="Produkt", value=self.ptype, inline=True)
-        e.add_field(name="Herkunft", value="🌴 Narco City" if self.nc else f"🌐 {self.who.value}", inline=True)
-        if self.nc:
-            e.add_field(name="Ingame-Name", value=self.who.value, inline=True)
+        e.add_field(name="Herkunft", value="🌴 Narco City", inline=True)
+        e.add_field(name="Ingame-Name", value=self.who.value, inline=True)
         e.add_field(name="Discord-Server", value=(f"✅ vorhanden · {link}" if self.has_server
                                                   else "🆕 wird mit eingerichtet"), inline=False)
         e.add_field(name="Ränge", value=self.ranks.value[:1024], inline=False)
@@ -881,66 +876,14 @@ class TicketModal(discord.ui.Modal):
         e.add_field(name="Von", value=member.mention, inline=True)
         if prod:
             e.add_field(name="🔎 Vorschau", value=f"[{prod['name']} ansehen]({product_url(prod['key'])})", inline=False)
-
-        if self.nc:
-            await channel.send(
-                content=f"<@{OWNER_ID}> {member.mention}\nDeine Anfrage ist eingegangen. "
-                        f"Du bekommst hier eine Bestätigung, sobald sie geprüft wurde. "
-                        f"Antwortet das Team, bekommst du eine DM.",
-                embed=e, view=AdminPanelView())
-            await interaction.followup.send(f"✅ Dein Ticket wurde erstellt: {channel.mention}", ephemeral=True)
-            await log(guild, "ticket-logs", emb("🟡 Ticket geöffnet",
-                                                f"#{tid} · {self.pname.value} · {member.mention}\n{channel.mention}"))
-        else:
-            pos = await waitlist_position(tid)
-            await channel.send(
-                content=f"{member.mention}\n🕓 **Du stehst auf der Warteliste (Platz {pos}).**\n"
-                        f"VOLT-Systeme sind nur für Narco City kostenlos, Narco City hat deshalb Vorrang. "
-                        f"Sobald ein Platz frei ist, rückt dein Ticket automatisch nach und du bekommst eine DM. "
-                        f"Die Konditionen klären wir dann hier im Ticket.",
-                embed=e, view=AdminPanelView())
-            await interaction.followup.send(
-                f"🕓 Du stehst auf der Warteliste (Platz {pos}): {channel.mention}", ephemeral=True)
-            await log(guild, "ticket-logs", emb("🕓 Warteliste",
-                                                f"#{tid} · {self.pname.value} · {member.mention} · {platform}\n"
-                                                f"{channel.mention} · Platz {pos}", 0x95A5A6))
-
-
-async def release_waitlist(guild: discord.Guild):
-    """Sind alle neuen Anfragen bearbeitet, rückt die älteste von der Warteliste nach."""
-    if await pool.fetchval("SELECT count(*) FROM tickets WHERE status='open'"):
-        return
-    t = await pool.fetchrow("SELECT * FROM tickets WHERE status='waiting' ORDER BY id LIMIT 1")
-    if not t:
-        return
-    ch = guild.get_channel(t["channel_id"])
-    if ch is None:  # Kanal wurde von Hand gelöscht
-        await pool.execute("UPDATE tickets SET status='deleted' WHERE id=$1", t["id"])
-        return
-    await apply_status(guild, ch, t, "open")
-    member = guild.get_member(t["user_id"])
-    await ch.send(content=f"<@{OWNER_ID}> {member.mention if member else ''}",
-                  embed=emb("✅ Du bist dran!",
-                            "Ein Platz ist frei geworden. Deine Anfrage wird jetzt geprüft, "
-                            "du bekommst hier eine Bestätigung mit den Konditionen.", 0x2ECC71))
-    await notify_ticket_owner(guild, t, "✅ Du bist dran",
-                              f"Deine Anfrage **{t['project_name']}** ist von der Warteliste nachgerückt.", force=True)
-    await log(guild, "ticket-logs", emb("🟡 Von der Warteliste nachgerückt", f"#{t['id']} · {t['project_name']}"))
-
-
-@tasks.loop(minutes=5)
-async def waitlist_loop():
-    g = main_guild()
-    if g:
-        try:
-            await release_waitlist(g)
-        except Exception as ex:
-            print("Warteliste:", repr(ex))
-
-
-@waitlist_loop.before_loop
-async def _waitlist_wait():
-    await bot.wait_until_ready()
+        await channel.send(
+            content=f"<@{OWNER_ID}> {member.mention}\nDeine Anfrage ist eingegangen. "
+                    f"Du bekommst hier eine Bestätigung, sobald sie geprüft wurde. "
+                    f"Antwortet das Team, bekommst du eine DM.",
+            embed=e, view=AdminPanelView())
+        await interaction.followup.send(f"✅ Dein Ticket wurde erstellt: {channel.mention}", ephemeral=True)
+        await log(guild, "ticket-logs", emb("🟡 Ticket geöffnet",
+                                            f"#{tid} · {self.pname.value} · {member.mention}\n{channel.mention}"))
 
 
 def product_options():
@@ -951,9 +894,44 @@ def product_options():
     return opts
 
 
+BL_DURATIONS = [("1 Tag", 1), ("3 Tage", 3), ("1 Woche", 7), ("2 Wochen", 14), ("1 Monat", 30), ("Dauerhaft", 0)]
+
+
+def bl_until_text(until) -> str:
+    return f"bis <t:{int(until)}:f> (<t:{int(until)}:R>)" if until else "dauerhaft"
+
+
+async def active_blacklist(user_id: int):
+    """Aktiver Blacklist-Eintrag oder None. Abgelaufene Sperren werden dabei gelöscht."""
+    r = await pool.fetchrow("SELECT * FROM blacklist WHERE user_id=$1", user_id)
+    if r and r["until"] and r["until"] <= time.time():
+        await pool.execute("DELETE FROM blacklist WHERE user_id=$1", user_id)
+        return None
+    return r
+
+
+async def blacklist_user(guild: discord.Guild, user: discord.abc.User, days: int, reason: str, by) -> int | None:
+    until = int(time.time() + days * 86400) if days > 0 else None
+    await pool.execute("INSERT INTO blacklist (user_id,reason,until,mod_id) VALUES ($1,$2,$3,$4) "
+                       "ON CONFLICT (user_id) DO UPDATE SET reason=$2, until=$3, mod_id=$4, "
+                       "created_at=CURRENT_TIMESTAMP", user.id, reason, until, by.id)
+    await log(guild, "mod-logs", emb("🚫 Ticket-Sperre", f"{user.mention} · {bl_until_text(until)}\n"
+                                                          f"**Grund:** {reason}\nVon: {by.mention}"))
+    try:
+        await user.send(embed=emb("🚫 Ticket-Sperre",
+                                  f"Du kannst {bl_until_text(until)} keine Tickets bei **{BRAND}** öffnen.\n"
+                                  f"**Grund:** {reason}", 0xE74C3C))
+    except discord.HTTPException:
+        pass
+    return until
+
+
 async def ticket_allowed(interaction: discord.Interaction) -> bool:
-    if await pool.fetchval("SELECT 1 FROM blacklist WHERE user_id=$1", interaction.user.id):
-        await interaction.response.send_message("🚫 Du kannst keine Tickets öffnen.", ephemeral=True)
+    bl = await active_blacklist(interaction.user.id)
+    if bl:
+        await interaction.response.send_message(
+            f"🚫 Du kannst {bl_until_text(bl['until'])} keine Tickets öffnen.\n**Grund:** {bl['reason'] or '–'}",
+            ephemeral=True)
         return False
     n = await pool.fetchval(
         "SELECT count(*) FROM tickets WHERE user_id=$1 AND status NOT IN ('archived','rejected','deleted')",
@@ -1084,7 +1062,7 @@ class DeleteConfirm(discord.ui.View):
             await interaction.followup.send(f"❌ Fehler: {e}", ephemeral=True)
 
 
-async def change_status(interaction: discord.Interaction, status: str):
+async def change_status(interaction: discord.Interaction, status: str, reason: str = None):
     ticket = await get_ticket(interaction.channel.id)
     if not ticket:
         return await interaction.response.send_message("❌ Kein Ticket in der Datenbank.", ephemeral=True)
@@ -1094,21 +1072,27 @@ async def change_status(interaction: discord.Interaction, status: str):
             "❌ Erst muss der Kunde das Angebot bestätigen.", ephemeral=True)
 
     await interaction.response.defer(ephemeral=True)
+    if reason:
+        await pool.execute("UPDATE tickets SET reject_reason=$1 WHERE id=$2", reason, ticket["id"])
     _, delayed = await apply_status(interaction.guild, interaction.channel, ticket, status)
 
     emoji, _, label = STATUS[status]
     member = interaction.guild.get_member(ticket["user_id"])
     worked = await work_seconds(ticket["id"])
     status_e = emb(f"{emoji} Status: {label}", STATUS_TEXT.get(status, ""))
+    if reason:
+        status_e.add_field(name="Grund", value=reason[:1024], inline=False)
     if status in ("running", "archived") and worked > 0:
         status_e.add_field(name="⏱️ Arbeitszeit", value=fmt_dur(worked))
     await interaction.channel.send(content=member.mention if member else None, embed=status_e)
     await log(interaction.guild, "ticket-logs",
               emb(f"{emoji} Status geändert", f"#{ticket['id']} · {ticket['project_name']} → **{label}**"
+                  + (f"\nGrund: {reason}" if reason else "")
                   + (f"\nArbeitszeit bisher: {fmt_dur(worked)}" if worked > 0 else "")))
     review_open = status == "running" and not await has_review(ticket["id"])
     await notify_ticket_owner(interaction.guild, ticket, f"{emoji} Neuer Status: {label}",
                               STATUS_TEXT.get(status, "Der Status deines Projekts hat sich geändert.")
+                              + (f"\n\n**Grund:** {reason}" if reason else "")
                               + ("\n\n⭐ Wenn du zufrieden bist, kannst du dein Projekt jetzt im Ticket bewerten."
                                  if review_open else ""),
                               force=True, author=interaction.user)
@@ -1174,7 +1158,10 @@ class AdminPanelView(discord.ui.View):
     @discord.ui.button(label="Ablehnen", emoji="🔴", style=discord.ButtonStyle.danger,
                        custom_id="volt:t:reject", row=1)
     async def reject(self, interaction, button):
-        await change_status(interaction, "rejected")
+        ticket = await get_ticket(interaction.channel.id)
+        if not ticket:
+            return await interaction.response.send_message("❌ Kein Ticket.", ephemeral=True)
+        await interaction.response.send_modal(RejectModal())
 
     @discord.ui.button(label="Notiz", emoji="📝", style=discord.ButtonStyle.secondary,
                        custom_id="volt:t:note", row=1)
@@ -1204,6 +1191,49 @@ class AdminPanelView(discord.ui.View):
             return await interaction.response.send_message("❌ Kein Ticket.", ephemeral=True)
         await interaction.response.send_message(
             "Ticket mit Transcript sichern und löschen?", view=DeleteConfirm(ticket), ephemeral=True)
+
+    @discord.ui.button(label="Sperren", emoji="🚫", style=discord.ButtonStyle.secondary,
+                       custom_id="volt:t:blacklist", row=1)
+    async def ban(self, interaction, button):
+        ticket = await get_ticket(interaction.channel.id)
+        if not ticket:
+            return await interaction.response.send_message("❌ Kein Ticket.", ephemeral=True)
+        await interaction.response.send_modal(BlacklistModal(ticket["user_id"]))
+
+
+class RejectModal(discord.ui.Modal, title="Ticket ablehnen"):
+    grund = discord.ui.TextInput(label="Grund der Ablehnung (sieht der Kunde)", style=discord.TextStyle.paragraph,
+                                 min_length=3, max_length=500,
+                                 placeholder="z. B. Wir betreuen ausschließlich Narco City / Angaben fehlen")
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await change_status(interaction, "rejected", reason=self.grund.value.strip())
+
+
+class BlacklistModal(discord.ui.Modal, title="Für Tickets sperren"):
+    tage = discord.ui.TextInput(label="Dauer in Tagen (0 = dauerhaft)", default="7", max_length=4)
+    grund = discord.ui.TextInput(label="Grund (sieht der User)", style=discord.TextStyle.paragraph,
+                                 min_length=3, max_length=300)
+
+    def __init__(self, user_id: int):
+        super().__init__()
+        self.user_id = user_id
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            days = int(self.tage.value.strip())
+            if days < 0:
+                raise ValueError
+        except ValueError:
+            return await interaction.response.send_message("❌ Dauer bitte als Zahl in Tagen (0 = dauerhaft).",
+                                                           ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        user = interaction.guild.get_member(self.user_id) or await bot.fetch_user(self.user_id)
+        until = await blacklist_user(interaction.guild, user, days, self.grund.value.strip(), interaction.user)
+        await interaction.channel.send(embed=emb("🚫 Für Tickets gesperrt",
+                                                 f"{user.mention} kann {bl_until_text(until)} keine neuen Tickets "
+                                                 f"öffnen.\n**Grund:** {self.grund.value.strip()}", 0xE74C3C))
+        await interaction.followup.send("✅ Gesperrt.", ephemeral=True)
 
 
 # ===============================================================
@@ -1505,7 +1535,7 @@ def order_embed(guild: discord.Guild) -> discord.Embed:
             "Wähle unten dein Produkt aus und beschreib deine Wünsche. Dein Ticket sieht nur du und der Owner.\n\n"
             + "\n\n".join(lines) +
             "\n\n🌴 **Für Narco City kostenlos.** Spenden sind freiwillig und werden im Ticket geklärt.\n"
-            "🌐 **Andere Server** kommen auf die Warteliste, Narco City hat Vorrang.")
+            "🌐 **Andere Server** können wir leider nicht annehmen.")
     return e
 
 
@@ -1717,13 +1747,16 @@ blacklist = app_commands.Group(name="blacklist", description="Ticket-Blacklist (
                                guild_only=True, default_permissions=discord.Permissions(administrator=True))
 
 
-@blacklist.command(name="add", description="User von Tickets sperren")
+@blacklist.command(name="add", description="User für eine bestimmte Zeit von Tickets sperren")
+@app_commands.describe(user="Wer gesperrt wird", dauer="Wie lange die Sperre gilt",
+                       grund="Grund – bekommt der User per DM und beim Öffnen eines Tickets angezeigt")
+@app_commands.choices(dauer=[app_commands.Choice(name=n, value=d) for n, d in BL_DURATIONS])
 @owner_check()
-async def bl_add(interaction: discord.Interaction, user: discord.User, grund: str = "–"):
-    await pool.execute("INSERT INTO blacklist (user_id,reason) VALUES ($1,$2) "
-                       "ON CONFLICT (user_id) DO UPDATE SET reason=$2", user.id, grund)
-    await interaction.response.send_message(f"🚫 {user} gesperrt.", ephemeral=True)
-    await log(interaction.guild, "mod-logs", emb("🚫 Blacklist", f"{user} · {grund}"))
+async def bl_add(interaction: discord.Interaction, user: discord.User, dauer: app_commands.Choice[int], grund: str):
+    await interaction.response.defer(ephemeral=True)
+    until = await blacklist_user(interaction.guild, user, dauer.value, grund, interaction.user)
+    await interaction.followup.send(f"🚫 {user.mention} ist {bl_until_text(until)} für Tickets gesperrt.\n"
+                                    f"**Grund:** {grund}", ephemeral=True)
 
 
 @blacklist.command(name="remove", description="Sperre aufheben")
@@ -1731,13 +1764,15 @@ async def bl_add(interaction: discord.Interaction, user: discord.User, grund: st
 async def bl_remove(interaction: discord.Interaction, user: discord.User):
     await pool.execute("DELETE FROM blacklist WHERE user_id=$1", user.id)
     await interaction.response.send_message(f"✅ {user} entsperrt.", ephemeral=True)
+    await log(interaction.guild, "mod-logs", emb("✅ Ticket-Sperre aufgehoben", f"{user.mention}"))
 
 
 @blacklist.command(name="list", description="Gesperrte User anzeigen")
 @owner_check()
 async def bl_list(interaction: discord.Interaction):
-    rows = await pool.fetch("SELECT * FROM blacklist")
-    text = "\n".join(f"<@{r['user_id']}> · {r['reason']}" for r in rows) or "Leer."
+    await pool.execute("DELETE FROM blacklist WHERE until IS NOT NULL AND until<=$1", int(time.time()))
+    rows = await pool.fetch("SELECT * FROM blacklist ORDER BY until IS NULL, until")
+    text = "\n".join(f"<@{r['user_id']}> · {bl_until_text(r['until'])}\n└ {r['reason'] or '–'}" for r in rows) or "Leer."
     await interaction.response.send_message(embed=emb("🚫 Blacklist", text), ephemeral=True)
 
 
@@ -3291,7 +3326,7 @@ async def security_status_cmd(interaction: discord.Interaction):
 
     top_ok = me.top_role.position >= max(r.position for r in guild.roles if not r.managed or r == me.top_role)
     hp_bans = await pool.fetchval("SELECT value FROM stats WHERE key='honeypot_bans'") or 0
-    bl = await pool.fetchval("SELECT count(*) FROM blacklist") or 0
+    bl = await pool.fetchval("SELECT count(*) FROM blacklist WHERE until IS NULL OR until>$1", int(time.time())) or 0
     warns = await pool.fetchval("SELECT count(*) FROM warns") or 0
     lock_left = int(raid_until - now) if raid_until > now else 0
 
@@ -3359,7 +3394,7 @@ async def help_cmd(interaction: discord.Interaction):
             "`/bewertung-anfragen` – um Bewertung bitten\n"
             "`/bewertungen-liste` `/bewertung-loeschen` – Bewertungen verwalten\n"
             "Rechtsklick auf Bewertung → Apps → **Bewertung löschen**\n"
-            "`/blacklist add|remove|list` – Ticket-Sperre\n`/panels` – Panels neu posten\n"
+            "`/blacklist add|remove|list` – Ticket-Sperre mit Dauer\n`/panels` – Panels neu posten\n"
             "`/setup` – Server komplett neu aufbauen (löscht alles!)"))
         e.add_field(name="Status & Uptime", inline=False, value=(
             "`/status online|störung|wartung` – Arbeitsstatus setzen\n"
@@ -4559,6 +4594,12 @@ async def migrate_db():
             await pool.execute(f"ALTER TABLE tickets ADD COLUMN {col} TEXT")
     if "slot" not in cols:
         await pool.execute("ALTER TABLE tickets ADD COLUMN slot INTEGER")
+    if "reject_reason" not in cols:
+        await pool.execute("ALTER TABLE tickets ADD COLUMN reject_reason TEXT")
+    bcols = {r[1] for r in await pool.fetch("PRAGMA table_info(blacklist)")}
+    for col in ("until", "mod_id"):
+        if col not in bcols:
+            await pool.execute(f"ALTER TABLE blacklist ADD COLUMN {col} INTEGER")
     rcols = {r[1] for r in await pool.fetch("PRAGMA table_info(reviews)")}
     if "message_id" not in rcols:
         await pool.execute("ALTER TABLE reviews ADD COLUMN message_id INTEGER")
@@ -4592,7 +4633,6 @@ async def setup_hook():
         print(f"{len(synced)} globale Befehle aktiv.")
     update_stats.start()
     uptime_monitor.start()
-    waitlist_loop.start()
 
 
 _cleaned_guild_commands = False
