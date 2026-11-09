@@ -124,11 +124,11 @@ ul,ol{margin:0;padding:0;list-style:none}
 /* Emblem (nach volt_strike) */
 .hero-emblem{width:100%;max-width:440px;justify-self:end;aspect-ratio:1/1}
 .emblem{width:100%;height:100%;display:block;overflow:visible}
-.em-ring{fill:#030101;stroke:var(--red);stroke-width:2.4}
-.em-ring-glow{fill:none;stroke:var(--red);stroke-width:7;opacity:.45;animation:ringGlow 7s ease-in-out infinite}
-.em-spark{fill:none;stroke:#ffd9db;stroke-width:1.6;stroke-linecap:round;stroke-dasharray:10 480;transform-origin:100px 100px;animation:spin 4.5s linear infinite}
+.em-ring{fill:var(--red)}
+.em-ring-glow{fill:var(--red);opacity:.45;animation:ringGlow 7s ease-in-out infinite}
+.em-spark{fill:none;stroke:#ffd0d3;stroke-width:16;stroke-linecap:round;stroke-dasharray:26 452;transform-origin:100px 100px;animation:spin 4.5s linear infinite}
 .em-specks{opacity:.7}
-.em-bolt-dim{fill:#2a0608;stroke:#4a0c10;stroke-width:1}
+.em-bolt-dim{fill:#2a0608;stroke:#4a0c10;stroke-width:.6}
 .em-bolt-lit{fill:#fff;opacity:0;animation:strike 7s linear infinite}
 .em-shock{fill:none;stroke:var(--red-hot);stroke-width:3;opacity:0;transform-box:fill-box;transform-origin:center;animation:shock 7s ease-out infinite}
 .em-flash{opacity:0;animation:flash 7s linear infinite}
