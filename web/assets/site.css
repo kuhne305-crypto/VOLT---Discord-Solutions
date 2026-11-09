@@ -775,3 +775,5 @@ section[id]{scroll-margin-top:84px}
   .botband-dash{text-align:left}
   .steps.three{grid-template-columns:minmax(0,1fr)}
 }
+.final-mig a{color:var(--muted);text-decoration:none} .final-mig a:hover{color:#fff}
+.legal nav{display:flex;flex-wrap:wrap;gap:.4rem 1.2rem}
