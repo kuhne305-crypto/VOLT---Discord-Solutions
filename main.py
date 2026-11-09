@@ -4638,10 +4638,38 @@ async def setup_hook():
 _cleaned_guild_commands = False
 
 
+async def sync_avatar():
+    """Profilbild des Bots = VOLT-Logo, animiert. Wird nur gesetzt, wenn sich das Bild geändert hat
+    (Discord begrenzt Profilbild-Änderungen). Klappt das GIF nicht, wird das Standbild genommen."""
+    base = os.path.join(WEB_DIR, "assets", "img")
+    try:
+        with open(os.path.join(base, "volt-avatar.gif"), "rb") as f:
+            gif = f.read()
+        with open(os.path.join(base, "volt-logo.png"), "rb") as f:
+            png = f.read()
+    except OSError:
+        return
+    h = hashlib.sha256(gif + png).hexdigest()[:16]
+    if await get_setting("avatar_hash") == h:
+        return
+    for kind, data in (("animiert", gif), ("Standbild", png)):
+        try:
+            await bot.user.edit(avatar=data)
+            await set_setting("avatar_hash", h)
+            print(f"Profilbild aktualisiert ({kind})")
+            return
+        except discord.HTTPException as ex:
+            print(f"Profilbild ({kind}) nicht geändert:", ex)
+
+
 @bot.event
 async def on_ready():
     global _cleaned_guild_commands
     print(f"VOLT online als {bot.user} ({bot.user.id})")
+    try:
+        await sync_avatar()
+    except Exception as ex:
+        print("Profilbild-Abgleich fehlgeschlagen:", repr(ex))
     # Bot-Status: Website als dauerhafte Werbung, bei Wartung/Störung mit Hinweis
     await apply_presence()
     # Nach einem Update mit neuen Panels: einmal automatisch neu posten (wie /panels)
