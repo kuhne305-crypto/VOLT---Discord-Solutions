@@ -41,6 +41,7 @@ if VOLUME_PATH:
 else:
     DB_PATH = "volt.db"
     print("WARNUNG: Kein Volume erkannt, Daten gehen bei Neustart verloren!")
+_backup = None  # VOLT Backups (siehe volt_backup.py)
 DONATION_URL = os.environ.get("DONATION_URL", "")  # leer lassen: Spenden werden auf Discord geklärt
 
 # Website (Railway setzt PORT automatisch)
@@ -4666,6 +4667,13 @@ async def sync_avatar():
 async def on_ready():
     global _cleaned_guild_commands
     print(f"VOLT online als {bot.user} ({bot.user.id})")
+    global _backup
+    if VOLUME_PATH and _backup is None:  # tägliches Backup in den VOLT-Backup-Channel
+        from volt_backup import Backup
+        _backup = Backup(bot, project="VOLT ADMIN · Website & Tickets", slug="volt-admin", db_path=DB_PATH, data_dir=VOLUME_PATH,
+                         restore_hint="Bot stoppen → Archiv entpacken → `volt.db` ins Volume legen → Bot starten")
+    if _backup:
+        _backup.start()
     try:
         await sync_avatar()
     except Exception as ex:
