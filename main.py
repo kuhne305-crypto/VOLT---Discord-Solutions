@@ -283,13 +283,13 @@ PRODUCTS = [
                 "The Stage (Main & Classic) per Drag & Drop",
                 "Felder-Übersicht und Ergebnisse mit Bildbeweis"],
      "demo": "Vorschau zum Durchklicken"},
-    {"key": "routen-system", "emoji": "🗺️", "name": "Routen-System", "tag": "Bot + Dashboard",
-     "label": "🗺️ Routen-System",
+    {"key": "routen-system", "emoji": "🗺️", "name": "Routen Manager", "tag": "Bot + Dashboard",
+     "label": "🗺️ Routen Manager",
      "short": "Familien, Kontrollen & Wachen, Arbeiter, Sanktionen, Blacklist und Routen-Sync in einem System.",
      "points": ["Familienrolle per Passwort, mit Kürzel und Ablaufdatum",
                 "Kontrollen & Wachen mit Level und Wochenranking",
                 "Zentraler Sanktionskatalog, Blacklist mit Vorfällen",
-                "Routen-Sync: Kick oder Bann gilt auch auf der Route"],
+                "Routen-Sync: Blood-Outs des Routen-Besitzers automatisch übernehmen"],
      "demo": "Vorschau zum Durchklicken"},
 ]
 CUSTOM_REQUEST = "💡 Individuelle Anfrage"
@@ -700,7 +700,7 @@ FAQ = {
     "Was kostet das?": "Für Familien und Fraktionen auf **Narco City** ist alles **kostenlos**. Wenn du zufrieden bist, "
                        "freue ich mich über eine freiwillige Spende, die klären wir direkt im Ticket. 💛\n\n"
                        "Anfragen von **anderen Servern** können wir leider nicht annehmen.",
-    "Welche Produkte gibt es?": "👪 **Familien-Dashboard** (All-in-One)\n⚽ **Fussball-Manager**\n🗺️ **Routen-System**\n\n"
+    "Welche Produkte gibt es?": "👪 **Familien-Dashboard** (All-in-One)\n⚽ **Fussball-Manager**\n🗺️ **Routen Manager**\n\n"
                                 f"Alle mit Vorschau zum Durchklicken auf **{SITE_LABEL}** und im Produkte-Kanal.",
     "Wie läuft eine Bestellung ab?": "1) In #bestellen dein Produkt auswählen\n2) Angeben, ob du von Narco City kommst und ob ihr "
                                      "schon einen Discord-Server habt\n3) Kurzen Fragebogen ausfüllen (Familie, Ränge, Funktionen)\n"
@@ -2718,7 +2718,7 @@ BOT_OFFLINE_AFTER = 180          # Sekunden ohne Meldung = offline
 BOT_HEARTBEAT_INTERVAL = 60
 PROCESS_START = time.time()
 BOT_PRODUCTS = [("👪 Familien-Dashboard", "Familien-Dashboard"), ("⚽ Fussball-Manager", "Fussball-Manager"),
-                ("🗺️ Routen-System", "Routen-System"), ("📺 Streamer-Bot", "Streamer-Bot"),
+                ("🗺️ Routen Manager", "Routen Manager"), ("📺 Streamer-Bot", "Streamer-Bot"),
                 ("🤖 Sonstiger Bot", "Bot")]
 
 
@@ -3500,7 +3500,7 @@ async def security_status_cmd(interaction: discord.Interaction):
 @bot.tree.command(name="volt", description="Website und Produkte von VOLT")
 async def volt_cmd(interaction: discord.Interaction):
     e = emb("⚡ VOLT – Discord Solutions",
-            "Familien-Dashboards, Fussball-Manager und Routen-Systeme mit eigenem Discord-Bot, für Narco City kostenlos. "
+            "Familien-Dashboards, Fussball-Manager und Routen Manager mit eigenem Discord-Bot, für Narco City kostenlos. "
             "Gebaut und betreut von einer Person, nur auf Spendenbasis.\n\n"
             f"🌐 **{SITE_LABEL}** – alle Produkte mit Vorschau und klickbarer Demo")
     await interaction.response.send_message(embed=e, view=volt_link_view(), ephemeral=True)
@@ -4738,6 +4738,9 @@ async def migrate_db():
     rcols = {r[1] for r in await pool.fetch("PRAGMA table_info(reviews)")}
     if "message_id" not in rcols:
         await pool.execute("ALTER TABLE reviews ADD COLUMN message_id INTEGER")
+    # Umbenennung: Routen-System → Routen Manager (bestehende Tickets und Bot-Einträge mitnehmen)
+    await pool.execute("UPDATE tickets SET project_type=$1 WHERE project_type=$2", "🗺️ Routen Manager", "🗺️ Routen-System")
+    await pool.execute("UPDATE bots SET product=$1 WHERE product=$2", "Routen Manager", "Routen-System")
 
 
 # ===============================================================

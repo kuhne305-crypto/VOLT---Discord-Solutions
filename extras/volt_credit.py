@@ -50,7 +50,7 @@ VOLT_OWN_SECONDS = 40     # ... und so lange der eigene Status des Bots (z. B. T
 
 # Für das Feld „Über mich“ (Description) im Developer Portal, max. 400 Zeichen
 VOLT_ABOUT = (
-    "⚡ Gebaut von VOLT – kostenlose Familien-Dashboards, Fussball-Manager und Routen-Systeme mit eigenem Discord-Bot.\n"
+    "⚡ Gebaut von VOLT – kostenlose Familien-Dashboards, Fussball-Manager und Routen Manager mit eigenem Discord-Bot.\n"
     f"🌐 {VOLT_LABEL}\n"
     f"💬 {VOLT_INVITE.replace('https://', '')}"
 )
@@ -230,7 +230,7 @@ def add_volt_command(tree: app_commands.CommandTree):
     async def volt_cmd(interaction: discord.Interaction):
         e = discord.Embed(
             title="⚡ Dieser Bot wurde von VOLT gebaut",
-            description=("Kostenlose Familien-Dashboards, Fussball-Manager und Routen-Systeme mit eigenem "
+            description=("Kostenlose Familien-Dashboards, Fussball-Manager und Routen Manager mit eigenem "
                          "Discord-Bot. Gebaut und betreut von einer Person, Made in Germany.\n\n"
                          f"🌐 **{VOLT_LABEL}**"),
             color=VOLT_COLOR)

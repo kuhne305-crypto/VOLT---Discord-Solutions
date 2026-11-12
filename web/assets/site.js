@@ -158,7 +158,7 @@
       latest: [
         { stars: 5, text: "Dashboard läuft seit Tag eins ohne Probleme. Schnelle Antworten im Ticket.", type: "👪 Familien-Dashboard", month: "2026-10" },
         { stars: 5, text: "The Stage per Drag & Drop spart uns jeden Abend Zeit.", type: "⚽ Fussball-Manager", month: "2026-09" },
-        { stars: 4, text: "Hat einen Tag länger gedauert als gedacht, Ergebnis passt aber.", type: "🗺️ Routen-System", month: "2026-09" }
+        { stars: 4, text: "Hat einen Tag länger gedauert als gedacht, Ergebnis passt aber.", type: "🗺️ Routen Manager", month: "2026-09" }
       ]
     }
   };
