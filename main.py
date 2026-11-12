@@ -61,7 +61,7 @@ VOLT_SYSTEM_PARTS = ("Compute", "Networking — Public", "Networking — Private
 # Optional: Schlüssel für die Verwaltung per HTTP (Bots anlegen, Dienste überwachen). Leer = aus.
 ADMIN_API_KEY = os.environ.get("VOLT_ADMIN_KEY", "").strip()
 # Wird diese Nummer erhöht, postet der Bot nach dem nächsten Start einmal alle Panels neu (wie /panels).
-PANELS_VERSION = "2026-11-08b"
+PANELS_VERSION = "2026-11-12a"
 
 MIN_ACCOUNT_AGE_DAYS = int(os.environ.get("MIN_ACCOUNT_AGE_DAYS", "3"))  # 0 = aus
 RAID_JOINS = int(os.environ.get("RAID_JOINS", "6"))      # so viele Joins ...

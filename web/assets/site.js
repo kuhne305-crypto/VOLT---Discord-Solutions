@@ -413,7 +413,7 @@
           ctx.shadowColor = "rgba(255,184,63,1)"; ctx.shadowBlur = 26 * p.w;
           ctx.strokeStyle = "rgba(255,184,63," + (a * .7 * p.w) + ")"; ctx.lineWidth = 6 * p.w; ctx.stroke();
           ctx.shadowBlur = 8;
-          ctx.strokeStyle = "rgba(255,236,236," + (a * (p.w > .6 ? 1 : .7)) + ")"; ctx.lineWidth = 1.7 * p.w + .4; ctx.stroke();
+          ctx.strokeStyle = "rgba(255,246,228," + (a * (p.w > .6 ? 1 : .7)) + ")"; ctx.lineWidth = 1.7 * p.w + .4; ctx.stroke();
         });
       });
       ctx.globalCompositeOperation = "source-over";
