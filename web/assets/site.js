@@ -404,14 +404,14 @@
       bolts.forEach(function (b) {
         var a = intensity(now - b.t0);
         if (a <= 0) return;
-        ctx.fillStyle = "rgba(255,31,42," + (a * .05) + ")";
+        ctx.fillStyle = "rgba(255,184,63," + (a * .05) + ")";
         ctx.fillRect(0, 0, W, H);
         b.parts.forEach(function (p) {
           ctx.beginPath();
           p.pts.forEach(function (pt, i) { i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1]); });
           ctx.lineJoin = "round"; ctx.lineCap = "round";
-          ctx.shadowColor = "rgba(255,31,42,1)"; ctx.shadowBlur = 26 * p.w;
-          ctx.strokeStyle = "rgba(255,31,42," + (a * .7 * p.w) + ")"; ctx.lineWidth = 6 * p.w; ctx.stroke();
+          ctx.shadowColor = "rgba(255,184,63,1)"; ctx.shadowBlur = 26 * p.w;
+          ctx.strokeStyle = "rgba(255,184,63," + (a * .7 * p.w) + ")"; ctx.lineWidth = 6 * p.w; ctx.stroke();
           ctx.shadowBlur = 8;
           ctx.strokeStyle = "rgba(255,236,236," + (a * (p.w > .6 ? 1 : .7)) + ")"; ctx.lineWidth = 1.7 * p.w + .4; ctx.stroke();
         });

@@ -73,8 +73,8 @@ MAX_OPEN_TICKETS = 2
 SUPPORT_SEES_TICKETS = False
 
 BRAND = "VOLT • Discord Solutions • VoltStudio.work"
-BRAND_COLOR = 0xFF1F2A   # VOLT-Rot
-C_ONLINE, C_WARTUNG, C_STOERUNG = 0x23A55A, 0xFF9F1A, 0xFF1F2A
+BRAND_COLOR = 0xFFB83F   # VOLT Electric Amber
+C_ONLINE, C_WARTUNG, C_STOERUNG = 0x23A55A, 0xFF7A45, 0xFF4D5E
 
 intents = discord.Intents.default()
 intents.members = True
@@ -1470,7 +1470,7 @@ def product_embed(p: dict) -> discord.Embed:
                       description=f"**{p['tag']}** · {p['short']}\n\n" + "\n".join(f"⚡ {x}" for x in p["points"]) +
                       f"\n\n💛 **0 €** · Spenden freiwillig, klären wir auf Discord\n🔎 {p['demo']} auf **{SITE_LABEL}**",
                       color=BRAND_COLOR)
-    e.set_image(url=f"{SITE_URL}/assets/img/products/{p['key']}.jpg")
+    e.set_image(url=f"{SITE_URL}/assets/img/products/{p['key']}.jpg?v=4")
     e.set_footer(text=BRAND)
     return e
 
@@ -1568,7 +1568,7 @@ async def post_website_panel(guild: discord.Guild):
             "⭐ **Bewertungen** von Kunden\n"
             "🇩🇪 **Made in Germany** · für Narco City kostenlos\n\n"
             f"👉 **{SITE_URL}**")
-    e.set_image(url=f"{SITE_URL}/assets/img/volt-banner-og.jpg")
+    e.set_image(url=f"{SITE_URL}/assets/img/volt-banner-og.jpg?v=4")
     v = volt_link_view()
     v.add_item(discord.ui.Button(label="Live-Status", emoji="📊", style=discord.ButtonStyle.link,
                                  url=f"{SITE_URL}/#status", row=1))
@@ -3196,7 +3196,7 @@ except ImportError:  # requirements.txt: Pillow
     HAS_PIL = False
 FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
 CARD_W, CARD_H = 1100, 400
-RED = (255, 31, 42)
+RED = (255, 184, 63)
 # Nur Zeichen, die die Karten-Schrift sicher kann (Emojis usw. fallen weg, ł -> l, ș -> s)
 CARD_OK = re.compile(r"[0-9A-Za-zÀ-ÖØ-öø-ÿ .,_\-'!?&+#]")
 
@@ -3252,21 +3252,21 @@ def _spaced(draw, xy, text, font, fill, spacing):
 def render_welcome_card(display_name: str, username: str, avatar: bytes, member_no: int, seed: int) -> io.BytesIO:
     rnd = random.Random(seed)
     W, H = CARD_W, CARD_H
-    base = Image.new("RGBA", (W, H), (5, 3, 3, 255))
+    base = Image.new("RGBA", (W, H), (16, 17, 18, 255))
 
-    # Rotes Glühen hinter dem Profilbild, Position leicht zufällig
+    # Amber-Glühen hinter dem Profilbild, Position leicht zufällig
     glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     gd = ImageDraw.Draw(glow)
     gx, gy = 200 + rnd.randint(-30, 30), 200 + rnd.randint(-30, 30)
-    gd.ellipse((gx - 260, gy - 260, gx + 260, gy + 260), fill=(255, 31, 42, 70))
-    gd.ellipse((W - 260 + rnd.randint(-60, 60), -180, W + 200, 260), fill=(255, 31, 42, 28))
+    gd.ellipse((gx - 260, gy - 260, gx + 260, gy + 260), fill=(255, 184, 63, 70))
+    gd.ellipse((W - 260 + rnd.randint(-60, 60), -180, W + 200, 260), fill=(255, 184, 63, 28))
     base = Image.alpha_composite(base, glow.filter(ImageFilter.GaussianBlur(90)))
 
     # Diagonale Streifen wie auf der Website
     stripes = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     sd = ImageDraw.Draw(stripes)
     for x in range(-H, W + H, 46):
-        sd.line([(x, H), (x + int(H * 0.7), 0)], fill=(255, 31, 42, 18), width=1)
+        sd.line([(x, H), (x + int(H * 0.7), 0)], fill=(255, 184, 63, 18), width=1)
     base = Image.alpha_composite(base, stripes)
 
     # Blitze: Form, Anzahl und Lage hängen an der User-ID
@@ -3280,16 +3280,16 @@ def render_welcome_card(display_name: str, username: str, avatar: bytes, member_
         x0 = rnd.uniform(720, W - 50)                 # rechts, damit der Name frei bleibt
         x1 = min(W - 20, max(660, x0 + rnd.uniform(-170, 170)))
         pts = _bolt_points(rnd, x0, -10, x1, rnd.uniform(H * .6, H + 20), 60)
-        bd.line(pts, fill=(255, 31, 42, 200), width=16, joint="curve")
-        hd.line(pts, fill=(255, 60, 70, 220), width=6, joint="curve")
-        cd.line(pts, fill=(255, 236, 238, 255), width=3, joint="curve")
+        bd.line(pts, fill=(255, 184, 63, 200), width=16, joint="curve")
+        hd.line(pts, fill=(255, 200, 102, 220), width=6, joint="curve")
+        cd.line(pts, fill=(255, 246, 228, 255), width=3, joint="curve")
         # kleine Seitenarme
         for _ in range(rnd.randint(1, 3)):
             j = rnd.randint(8, len(pts) - 8)
             sx, sy = pts[j]
             br = _bolt_points(rnd, sx, sy, sx + rnd.uniform(-120, 120), sy + rnd.uniform(40, 120), 26)
-            bd.line(br, fill=(255, 31, 42, 150), width=8, joint="curve")
-            cd.line(br, fill=(255, 220, 224, 200), width=2, joint="curve")
+            bd.line(br, fill=(255, 184, 63, 150), width=8, joint="curve")
+            cd.line(br, fill=(255, 236, 200, 200), width=2, joint="curve")
     base = Image.alpha_composite(base, bolts.filter(ImageFilter.GaussianBlur(10)))
     base = Image.alpha_composite(base, sharp.filter(ImageFilter.GaussianBlur(2.5)))
     base = Image.alpha_composite(base, core)
@@ -3304,15 +3304,15 @@ def render_welcome_card(display_name: str, username: str, avatar: bytes, member_
         ln = rnd.uniform(3, 11)
         b = a + rnd.uniform(-.6, .6)
         specks.line([(px, py), (px + math.cos(b) * ln, py + math.sin(b) * ln)],
-                    fill=(255, 42, 51, rnd.randint(70, 210)), width=rnd.choice((1, 2)))
+                    fill=(255, 190, 80, rnd.randint(70, 210)), width=rnd.choice((1, 2)))
 
     # Ring mit Glühen
     ring = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     rd = ImageDraw.Draw(ring)
-    rd.ellipse((cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8), outline=(255, 31, 42, 255), width=10)
+    rd.ellipse((cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8), outline=(255, 184, 63, 255), width=10)
     base = Image.alpha_composite(base, ring.filter(ImageFilter.GaussianBlur(10)))
     rd2 = ImageDraw.Draw(base)
-    rd2.ellipse((cx - r - 6, cy - r - 6, cx + r + 6, cy + r + 6), fill=(3, 1, 1, 255), outline=(255, 31, 42, 255), width=5)
+    rd2.ellipse((cx - r - 6, cy - r - 6, cx + r + 6, cy + r + 6), fill=(16, 17, 18, 255), outline=(255, 184, 63, 255), width=5)
 
     # Profilbild
     try:
@@ -3326,7 +3326,7 @@ def render_welcome_card(display_name: str, username: str, avatar: bytes, member_
         base.paste(av, (cx - r, cy - r), mask)
     else:
         bolt = [(cx + 18, cy - 70), (cx - 26, cy + 8), (cx - 2, cy + 8), (cx - 22, cy + 72), (cx + 26, cy - 8), (cx + 4, cy - 8)]
-        rd2.polygon(bolt, fill=(255, 255, 255, 255))
+        rd2.polygon(bolt, fill=(255, 184, 63, 255))
 
     # Text
     d = ImageDraw.Draw(base)
@@ -3345,21 +3345,21 @@ def render_welcome_card(display_name: str, username: str, avatar: bytes, member_
         while len(name) > 4 and d.textlength(name + "…", font=f_name) > max_w:
             name = name[:-1]
         name = name.rstrip() + "…"
-    d.text((tx + 3, 140 + 3), name, font=f_name, fill=(255, 31, 42, 120))
-    d.text((tx, 140), name, font=f_name, fill=(255, 255, 255, 255))
+    d.text((tx + 3, 140 + 3), name, font=f_name, fill=(255, 184, 63, 120))
+    d.text((tx, 140), name, font=f_name, fill=(242, 239, 232, 255))
     f_sub = _font("Barlow-SemiBold.ttf", 30)
     sub = f"Mitglied #{member_no}" + (f"  ·  @{username}" if username else "")
-    d.text((tx, 256), sub, font=f_sub, fill=(200, 184, 186, 255))
+    d.text((tx, 256), sub, font=f_sub, fill=(207, 201, 189, 255))
     d.rectangle((tx, 312, tx + 64, 316), fill=RED + (255,))
     f_site = _font("Rajdhani-Bold.ttf", 24)
-    _spaced(d, (tx + 84, 300), SITE_LABEL.upper(), f_site, (160, 140, 142, 255), 4)
+    _spaced(d, (tx + 84, 300), SITE_LABEL.upper(), f_site, (184, 178, 166, 255), 4)
 
     # Abgerundete Karte mit dünnem Rahmen
     mask = Image.new("L", (W, H), 0)
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, W - 1, H - 1), radius=30, fill=255)
     card = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     card.paste(base, (0, 0), mask)
-    ImageDraw.Draw(card).rounded_rectangle((1, 1, W - 2, H - 2), radius=30, outline=(62, 28, 31, 255), width=2)
+    ImageDraw.Draw(card).rounded_rectangle((1, 1, W - 2, H - 2), radius=30, outline=(58, 59, 63, 255), width=2)
     out = io.BytesIO()
     card.save(out, "PNG", optimize=True)
     out.seek(0)
