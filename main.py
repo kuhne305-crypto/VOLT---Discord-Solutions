@@ -88,16 +88,20 @@ pool = None  # DB-Objekt, wird im setup_hook gesetzt
 # ===============================================================
 # ROLLEN
 # ===============================================================
+# Rollenfarben im VOLT-Look: vom Amber (Owner) über Bronze bis zu den neutralen Tönen
 ROLES = [
-    ("owner", "👑 Owner", 0xF1C40F, discord.Permissions(administrator=True), True),
-    ("admin", "🛡️ Admin", 0xE74C3C, discord.Permissions(administrator=True), True),
-    ("support", "🔧 Support", 0x3498DB, discord.Permissions(
+    ("owner", "👑 Owner", 0xFFB83F, discord.Permissions(administrator=True), True),
+    ("admin", "🛡️ Admin", 0xD99A35, discord.Permissions(administrator=True), True),
+    ("support", "🔧 Support", 0xC29A5B, discord.Permissions(
         manage_messages=True, moderate_members=True, kick_members=True), True),
-    ("kunde", "💼 Kunde", 0x2ECC71, discord.Permissions.none(), True),
-    ("user", "✅ User", 0x95A5A6, discord.Permissions.none(), False),
-    ("bots", "🤖 Bots", 0x9B59B6, discord.Permissions.none(), False),
-    ("unverified", "⛔ Unverifiziert", 0x7F8C8D, discord.Permissions.none(), False),
+    ("kunde", "💼 Kunde", 0xF2EFE8, discord.Permissions.none(), True),
+    ("user", "✅ User", 0xB8B2A6, discord.Permissions.none(), False),
+    ("bots", "🤖 Bots", 0x92734B, discord.Permissions.none(), False),
+    ("unverified", "⛔ Unverifiziert", 0x6B6862, discord.Permissions.none(), False),
 ]
+# Icon aus dem VOLT-Icon-Set pro Rolle (Rollen-Icons gehen erst ab Server-Boost Stufe 2)
+ROLE_ICON = {"owner": "owner", "admin": "admin", "support": "support", "kunde": "kunde",
+             "user": "user", "bots": "bot", "unverified": "unverifiziert"}
 ROLE_NAMES = {k: n for k, n, *_ in ROLES}
 ROLE_CACHE: dict[int, dict[str, discord.Role]] = {}
 
@@ -189,45 +193,46 @@ def ticket_overwrites(guild: discord.Guild, creator: discord.Member):
 # ===============================================================
 # SERVER-STRUKTUR
 # ===============================================================
+SEP = "・"   # Trenner zwischen Emoji und Kanalname (VOLT-Design, vorher „│“)
 STRUCTURE = [
-    ("━━━━━ 📊 SERVERINFO ━━━━━", "info", [
+    ("／ SERVERINFO", "info", [
         ("👥 Mitglieder: 0", "voice"),
         ("🟢 Status: Online", "voice"),
         ("⭐ Bewertungen: bald verfügbar", "voice"),
     ]),
-    ("━━━━━ 👋 WILLKOMMEN ━━━━━", "public", [
-        ("📜│regeln", "text"),
-        ("👋│willkommen", "text"),
-        ("✅│verify", "text"),
-        ("🚫│nicht-schreiben", "text", "honeypot"),
+    ("／ WILLKOMMEN", "public", [
+        (f"📜{SEP}regeln", "text"),
+        (f"👋{SEP}willkommen", "text"),
+        (f"⚡{SEP}verify", "text"),
+        (f"⛔{SEP}nicht-schreiben", "text", "honeypot"),
     ]),
-    ("━━━━━ 📌 INFOS ━━━━━", "verified", [
-        ("📢│ankündigungen", "text"),
-        ("🟢│server-status", "text"),
-        ("📡│uptime", "text"),
-        ("🌐│website", "text"),
-        ("⭐│bewertungen", "text"),
-        ("❓│faq", "text"),
-        ("🎨│portfolio", "text"),
+    ("／ INFOS", "verified", [
+        (f"🔔{SEP}ankündigungen", "text"),
+        (f"📟{SEP}server-status", "text"),
+        (f"📡{SEP}uptime", "text"),
+        (f"🔗{SEP}website", "text"),
+        (f"⭐{SEP}bewertungen", "text"),
+        (f"💡{SEP}faq", "text"),
+        (f"🖼️{SEP}portfolio", "text"),
     ]),
-    ("━━━━━ 🛒 SHOP ━━━━━", "verified", [
-        ("🛍️│produkte", "text"),
-        ("🛒│bestellen", "text"),
+    ("／ SHOP", "verified", [
+        (f"🏷️{SEP}produkte", "text"),
+        (f"🛒{SEP}bestellen", "text"),
     ]),
-    ("━━━━━ 🟡 OFFENE TICKETS ━━━━━", "ticket", []),
-    ("━━━━━ 🔵 IN BEARBEITUNG ━━━━━", "ticket", []),
-    ("━━━━━ 🟢 LAUFENDE PROJEKTE ━━━━━", "ticket", []),
-    ("━━━━━ 🟠 WARTUNG ━━━━━", "ticket", []),
-    ("━━━━━ 📦 ARCHIV ━━━━━", "ticket", []),
-    ("━━━━━ 🛠️ TEAM-INTERN ━━━━━", "team", [
-        ("💬│team-chat", "text"),
-        ("📝│aufgaben", "text"),
+    ("🟡 OFFENE TICKETS", "ticket", []),
+    ("🔵 IN BEARBEITUNG", "ticket", []),
+    ("🟢 LAUFENDE PROJEKTE", "ticket", []),
+    ("🟠 WARTUNG", "ticket", []),
+    ("📦 ARCHIV", "ticket", []),
+    ("／ TEAM-INTERN", "team", [
+        (f"💬{SEP}team-chat", "text"),
+        (f"📋{SEP}aufgaben", "text"),
     ]),
-    ("━━━━━ 📜 LOGS ━━━━━", "admin", [
-        ("🔐│admin-logs", "text"),
-        ("🗂️│ticket-logs", "text"),
-        ("🛡️│mod-logs", "text"),
-        ("🚪│join-leave-logs", "text"),
+    ("／ LOGS", "admin", [
+        (f"🔐{SEP}admin-logs", "text"),
+        (f"🗂️{SEP}ticket-logs", "text"),
+        (f"🛡️{SEP}mod-logs", "text"),
+        (f"🚪{SEP}join-leave-logs", "text"),
     ]),
 ]
 TICKET_CATEGORY_KEYS = ("OFFENE TICKETS", "WARTELISTE", "IN BEARBEITUNG", "LAUFENDE PROJEKTE", "WARTUNG", "ARCHIV")
@@ -605,7 +610,7 @@ def slugify(text: str) -> str:
 
 async def apply_status(guild: discord.Guild, channel: discord.TextChannel, ticket, status: str):
     emoji, cat_key, _ = STATUS[status]
-    name = f"{emoji}│{ticket['slug']}"
+    name = f"{emoji}{SEP}{ticket['slug']}"
     cat = find_category(guild, cat_key)
     kwargs = {}
     delayed = 0
@@ -854,7 +859,7 @@ class TicketModal(discord.ui.Modal):
             desc += f"\n\nWünsche für den neuen Discord: {self.link.value}"
         cat = find_category(guild, "OFFENE TICKETS")
         channel = await guild.create_text_channel(
-            f"🟡│{slug}", category=cat, overwrites=ticket_overwrites(guild, member),
+            f"🟡{SEP}{slug}", category=cat, overwrites=ticket_overwrites(guild, member),
             topic=f"Ticket von {member} | {self.ptype} | Narco City", reason="VOLT Ticket")
         tid = await pool.fetchval(
             """INSERT INTO tickets (channel_id,user_id,project_type,project_name,slug,description,
@@ -1452,6 +1457,180 @@ class ReviewView(discord.ui.View):
 
 
 # ===============================================================
+# VOLT-DESIGN
+# Eigenes Icon-Set als Server-Emojis, Kanalnamen, Rollenfarben, Rollen-Icons
+# und Banner. Läuft einmal nach einem Update mit neuer DESIGN_VERSION (oder
+# per /design). Nichts wird gelöscht: bestehende Kanäle und Rollen werden nur
+# umbenannt bzw. umgefärbt, fehlende Icons werden hochgeladen.
+# ===============================================================
+DESIGN_VERSION = "2026-11-12a"
+ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "assets", "icons")
+BANNER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "assets", "img", "discord-banner.png")
+ICON_EMOJIS: dict[str, discord.Emoji] = {}   # Icon-Name (ohne „v_“) -> Server-Emoji
+
+
+def icon_meta() -> dict:
+    try:
+        with open(os.path.join(ICON_DIR, "icons.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {"order": [], "icons": {}}
+
+
+def refresh_icon_map(guild: discord.Guild | None):
+    if guild is None:
+        return
+    ICON_EMOJIS.clear()
+    for e in guild.emojis:
+        if e.name.startswith("v_"):
+            ICON_EMOJIS[e.name[2:]] = e
+
+
+def ic(key: str, fallback: str = "") -> str:
+    """Icon als Emoji-Text für Embeds. Fehlt es auf dem Server, kommt das normale Emoji."""
+    e = ICON_EMOJIS.get(key)
+    return str(e) if e else fallback
+
+
+def ic_emoji(key: str, fallback: str):
+    """Icon für Buttons und Auswahlmenüs."""
+    return ICON_EMOJIS.get(key) or fallback
+
+
+def _icon_png(key: str) -> bytes | None:
+    try:
+        with open(os.path.join(ICON_DIR, "discord", f"v_{key}.png"), "rb") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+async def sync_icon_emojis(guild: discord.Guild) -> tuple[int, int]:
+    """Lädt fehlende Icons als Server-Emojis hoch. Die wichtigsten zuerst (Logo, Ränge, Kanäle,
+    Produkte, dann Module) und nur so viele, wie Emoji-Plätze frei sind."""
+    refresh_icon_map(guild)
+    free = guild.emoji_limit - sum(1 for e in guild.emojis if not e.animated)
+    created = missing = 0
+    for key in icon_meta().get("order", []):
+        if key in ICON_EMOJIS:
+            continue
+        data = _icon_png(key)
+        if free <= 0 or data is None:
+            missing += 1
+            continue
+        try:
+            emoji = await guild.create_custom_emoji(name=f"v_{key}", image=data, reason="VOLT Icon-Set")
+            ICON_EMOJIS[key] = emoji
+            created += 1
+            free -= 1
+        except discord.HTTPException as ex:
+            print(f"Icon v_{key} nicht hochgeladen:", ex)
+            missing += 1
+    return created, missing
+
+
+def _design_targets():
+    """Aus STRUCTURE: Schlüsselwort -> neuer Name (Kategorien) und Kanalname ohne Emoji -> neuer Name."""
+    cats, chans = {}, {}
+    for cat_name, _, channels in STRUCTURE:
+        cats[cat_name.split(" ", 1)[1]] = cat_name
+        for entry in channels:
+            if entry[1] == "text" and SEP in entry[0]:
+                chans[entry[0].split(SEP, 1)[1]] = entry[0]
+    cats["WARTELISTE"] = "🕓 WARTELISTE"
+    return cats, chans
+
+
+async def apply_design(guild: discord.Guild) -> dict:
+    st = {"kat": 0, "kanal": 0, "ticket": 0, "rollen": 0, "rollen_icons": 0, "banner": None, "fehler": 0}
+    cats, chans = _design_targets()
+
+    async def rename(obj, name, key):
+        try:
+            await obj.edit(name=name, reason="VOLT Design")
+            st[key] += 1
+            if isinstance(obj, discord.TextChannel):
+                rename_log[obj.id].append(time.time())
+        except discord.HTTPException as ex:
+            st["fehler"] += 1
+            print(f"Design: {obj.name} nicht umbenannt:", ex)
+
+    # Kategorien: Schlüsselwort im alten Namen entscheidet (die Ticket-Logik sucht nach denselben Wörtern)
+    for c in guild.categories:
+        for word, new in sorted(cats.items(), key=lambda kv: -len(kv[0])):
+            if word in c.name.upper():
+                if c.name != new:
+                    await rename(c, new, "kat")
+                break
+
+    # Feste Kanäle: nur wenn der Name ohne Emoji/Trenner genau passt (Kunden-Kanäle bleiben unberührt)
+    for ch in guild.text_channels:
+        rest = re.sub(r"^[^0-9a-zäöüß]+", "", ch.name)
+        new = chans.get(rest)
+        if new and ch.name != new:
+            await rename(ch, new, "kanal")
+
+    # Ticket-Kanäle bekommen den neuen Trenner
+    for t in await pool.fetch("SELECT channel_id, slug, status FROM tickets WHERE status <> 'deleted'"):
+        ch = guild.get_channel(t["channel_id"])
+        if not isinstance(ch, discord.TextChannel) or t["status"] not in STATUS or not t["slug"]:
+            continue
+        new = f"{STATUS[t['status']][0]}{SEP}{t['slug']}"
+        if ch.name != new and not rename_wait(ch.id):
+            await rename(ch, new, "ticket")
+
+    # Rollen: Farben aus der VOLT-Palette, Rollen-Icons wenn der Server sie kann (Boost Stufe 2)
+    icons_ok = "ROLE_ICONS" in guild.features
+    for key, name, color, _, _ in ROLES:
+        role = find_role(guild, key)
+        if role is None or role >= guild.me.top_role:
+            continue
+        kw = {}
+        if role.colour.value != color:
+            kw["colour"] = discord.Colour(color)
+        if icons_ok:
+            data = _icon_png(ROLE_ICON.get(key, ""))
+            if data:
+                kw["display_icon"] = data
+        if kw:
+            try:
+                await role.edit(reason="VOLT Design", **kw)
+                st["rollen"] += 1
+                st["rollen_icons"] += 1 if "display_icon" in kw else 0
+            except discord.HTTPException as ex:
+                st["fehler"] += 1
+                print(f"Design: Rolle {role.name} nicht geändert:", ex)
+
+    # Server-Banner (geht erst ab Boost Stufe 2)
+    if "BANNER" in guild.features:
+        try:
+            with open(BANNER_FILE, "rb") as f:
+                await guild.edit(banner=f.read(), reason="VOLT Design")
+            st["banner"] = "gesetzt"
+        except (OSError, discord.HTTPException) as ex:
+            st["banner"] = f"nicht gesetzt ({ex})"
+    else:
+        st["banner"] = "braucht Server-Boost Stufe 2"
+    return st
+
+
+async def run_design(guild: discord.Guild) -> str:
+    created, missing = await sync_icon_emojis(guild)
+    st = await apply_design(guild)
+    await post_panels(guild)   # Panels mit den neuen Icons neu posten
+    await set_setting("design_version", DESIGN_VERSION)
+    await set_setting("panels_version", PANELS_VERSION)
+    msg = (f"Icons: {created} hochgeladen, {len(ICON_EMOJIS)} aktiv"
+           + (f", {missing} ohne freien Emoji-Platz" if missing else "") + "\n"
+           f"Umbenannt: {st['kat']} Kategorien, {st['kanal']} Kanäle, {st['ticket']} Ticket-Kanäle\n"
+           f"Rollen angepasst: {st['rollen']}" + (f" (davon {st['rollen_icons']} mit Icon)" if st['rollen_icons'] else "")
+           + f"\nBanner: {st['banner']}" + (f"\nFehler: {st['fehler']}" if st["fehler"] else ""))
+    print("VOLT-Design angewendet:\n" + msg)
+    await log(guild, "admin-logs", emb(f"{ic('volt', '⚡')} VOLT-Design angewendet", msg))
+    return msg
+
+
+# ===============================================================
 # PANELS (Texte in den Channels)
 # ===============================================================
 RULES = (
@@ -1465,8 +1644,15 @@ RULES = (
     "Verstöße führen zu Verwarnung, Timeout oder Bann.\n"
     "Klicke im Channel **#verify** auf **Regeln akzeptieren**, um den Server freizuschalten."
 )
+PRODUCT_ICON = {"familien-dashboard": "familie", "fussball-manager": "fussball", "routen-system": "routen"}
+
+
+def p_icon(p: dict) -> str:
+    return ic(PRODUCT_ICON.get(p["key"], ""), p["emoji"])
+
+
 def product_embed(p: dict) -> discord.Embed:
-    e = discord.Embed(title=f"{p['emoji']} {p['name']}", url=product_url(p["key"]),
+    e = discord.Embed(title=f"{p_icon(p)} {p['name']}", url=product_url(p["key"]),
                       description=f"**{p['tag']}** · {p['short']}\n\n" + "\n".join(f"⚡ {x}" for x in p["points"]) +
                       f"\n\n💛 **0 €** · Spenden freiwillig, klären wir auf Discord\n🔎 {p['demo']} auf **{SITE_LABEL}**",
                       color=BRAND_COLOR)
@@ -1481,7 +1667,7 @@ def product_view(guild: discord.Guild, p: dict) -> discord.ui.View:
                                  url=product_url(p["key"])))
     order = find_channel(guild, "bestellen")
     if order:
-        v.add_item(discord.ui.Button(label="Jetzt anfragen", emoji="🛒", style=discord.ButtonStyle.link,
+        v.add_item(discord.ui.Button(label="Jetzt anfragen", emoji=ic_emoji("bestellen", "🛒"), style=discord.ButtonStyle.link,
                                      url=channel_url(guild, order)))
     return v
 
@@ -1489,7 +1675,7 @@ def product_view(guild: discord.Guild, p: dict) -> discord.ui.View:
 async def honeypot_embed() -> discord.Embed:
     n = await pool.fetchval("SELECT value FROM stats WHERE key='honeypot_bans'") or 0
     e = discord.Embed(
-        title="🚨⚠️ WICHTIGER HINWEIS ⚠️🚨",
+        title=f"{ic('stop', '🚨')} WICHTIGER HINWEIS",
         description=(
             "**Dieser Kanal dient lediglich dazu, gehackte Spam-Accounts automatisch zu bannen!**\n\n"
             "Das bedeutet:\n"
@@ -1529,10 +1715,10 @@ async def send_panel(guild: discord.Guild, key: str, embed: discord.Embed, view=
 
 
 def order_embed(guild: discord.Guild) -> discord.Embed:
-    lines = [f"{p['emoji']} **{p['name']}** · {p['tag']}\n{p['short']} [Vorschau ansehen]({product_url(p['key'])})"
+    lines = [f"{p_icon(p)} **{p['name']}** · {p['tag']}\n{p['short']} [Vorschau ansehen]({product_url(p['key'])})"
              for p in PRODUCTS]
     lines.append("💡 **Individuelle Anfrage**\nEtwas anderes oder eine Erweiterung für dein System.")
-    e = emb("🛒 Bestellen",
+    e = emb(f"{ic('bestellen', '🛒')} Bestellen",
             "Wähle unten dein Produkt aus und beschreib deine Wünsche. Dein Ticket sieht nur du und der Owner.\n\n"
             + "\n\n".join(lines) +
             "\n\n🌴 **Für Narco City kostenlos.** Spenden sind freiwillig und werden im Ticket geklärt.\n"
@@ -1546,7 +1732,7 @@ async def post_products_panel(guild: discord.Guild):
         return
     await purge_own(ch)
     order = find_channel(guild, "bestellen")
-    head = emb("🛍️ Unsere Produkte",
+    head = emb(f"{ic('produkte', '🛍️')} Unsere Produkte",
                "Jedes Produkt besteht aus Dashboard und eigenem Discord-Bot und wird für eure Familie eingerichtet.\n"
                f"Zu jedem Produkt gibt es eine **Vorschau zum Durchklicken** auf **[{SITE_LABEL}]({SITE_URL}/#produkte)**.\n\n"
                "🌴 **Für Narco City kostenlos** · Spenden freiwillig, klären wir auf Discord\n"
@@ -1560,7 +1746,7 @@ async def post_website_panel(guild: discord.Guild):
     ch = find_channel(guild, "website") or find_channel(guild, "webseite")
     if not ch:
         return
-    e = emb(f"🌐 {SITE_LABEL}",
+    e = emb(f"{ic('website', '🌐')} {SITE_LABEL}",
             "Die Website von **VOLT – Discord Solutions**.\n\n"
             "📊 **Live-Status:** Werkbank, Wartezeit, Auslastung und Systemstatus\n"
             "🔎 **Alle Produkte** mit Vorschau zum Durchklicken\n"
@@ -1577,8 +1763,8 @@ async def post_website_panel(guild: discord.Guild):
 
 
 async def post_panels(guild: discord.Guild):
-    await send_panel(guild, "regeln", emb("📜 Serverregeln", RULES))
-    await send_panel(guild, "verify", emb("✅ Verifizierung",
+    await send_panel(guild, "regeln", emb(f"{ic('regeln', '📜')} Serverregeln", RULES))
+    await send_panel(guild, "verify", emb(f"{ic('verify', '✅')} Verifizierung",
                                           "Lies die Regeln in #regeln und klicke unten, um sie zu akzeptieren."),
                      VerifyView())
     # Willkommen: kein fester Kasten mehr, dort stehen jetzt die Willkommenskarten neuer Mitglieder
@@ -1597,7 +1783,7 @@ async def post_panels(guild: discord.Guild):
     kosten = find_channel(guild, "kosten")         # Kosten-Übersicht ist überflüssig: Kanal wird geleert
     if kosten:
         await purge_own(kosten)
-    await send_panel(guild, "faq", emb("❓ Häufige Fragen", "Wähle unten eine Frage aus."), FaqView())
+    await send_panel(guild, "faq", emb(f"{ic('faq', '❓')} Häufige Fragen", "Wähle unten eine Frage aus."), FaqView())
     await send_panel(guild, "bestellen", order_embed(guild), TicketPanelView())
     # Nicht purgen: sonst würden die geposteten Bewertungen mitgelöscht
     await refresh_review_panel(guild)
@@ -2156,6 +2342,16 @@ async def panels_cmd(interaction: discord.Interaction):
     await interaction.response.defer(ephemeral=True)
     await post_panels(interaction.guild)
     await interaction.followup.send("✅ Panels aktualisiert.", ephemeral=True)
+
+
+@bot.tree.command(name="design", description="VOLT-Design anwenden: Icons, Kanalnamen, Rollenfarben, Banner (nichts wird gelöscht)")
+@app_commands.guild_only()
+@app_commands.default_permissions(administrator=True)
+@owner_check()
+async def design_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    msg = await run_design(interaction.guild)
+    await interaction.followup.send(f"✅ Design angewendet.\n{msg}", ephemeral=True)
 
 
 # ===============================================================
@@ -3225,20 +3421,39 @@ def _font(name: str, size: int):
             return ImageFont.load_default()
 
 
-def _bolt_points(rnd: random.Random, x0, y0, x1, y1, rough):
-    pts = [(x0, y0), (x1, y1)]
-    disp = rough
-    for _ in range(6):
-        nxt = [pts[0]]
-        for a, b in zip(pts, pts[1:]):
-            mx, my = (a[0] + b[0]) / 2, (a[1] + b[1]) / 2
-            dx, dy = b[0] - a[0], b[1] - a[1]
-            ln = math.hypot(dx, dy) or 1
-            off = rnd.uniform(-disp, disp)
-            nxt += [(mx - dy / ln * off, my + dx / ln * off), b]
-        pts = nxt
-        disp *= .55
-    return pts
+# VOLT-Logo als Polygone (aus dem Logo-SVG, Raster 0–100)
+_LOGO_RING = ("M95.68 48.63L88.42 57.22L84.84 68.43L66.45 85.89L43.14 85.59L39.3 84.51L31.98 90.75L39.14 92.87L68.3 92.64L70.03 91.9L89.21 73.88L94.75 61.29L95.7 55.86Z"
+              "M4.3 48.16L4.67 58.75L7.49 67.96L12.62 76.3L21.28 85.08L25.35 78.62L15.11 67.64L11.6 57.47Z"
+              "M34.29 24.02L15.04 40.95L14.65 56.64L21.42 66.07L21.54 39.15Z"
+              "M80.22 16L76.11 21.99L84.15 30.19L86.85 42.16L77.54 51.93L77.49 69.7L83.69 58.38L95.17 44.42L91.29 27.18L88.54 23.67Z"
+              "M66.87 10.57L60.12 9.07L40.64 8.61L27.52 14.27L17.58 20.28L21.77 21.82L6.1 37.3L4.78 43.5L10.42 50.75L11.23 40.35L34.82 16.74L43.6 15.05L53.77 15.12L60.4 16.32Z")
+_LOGO_BOLT = "M84.89 2L24.82 54.52L46.88 54.01L33.13 74.69L16.31 98L80.57 42.55L56.28 43.24Z"
+
+
+def _polys(path: str, x: float, y: float, size: float):
+    out = []
+    for sub in path.split("M")[1:]:
+        pts = []
+        for pair in sub.rstrip("Z").split("L"):
+            px, py = (float(v) for v in pair.split())
+            pts.append((x + px * size / 100, y + py * size / 100))
+        out.append(pts)
+    return out
+
+
+def _draw_logo(img, x: float, y: float, size: float):
+    """Echtes VOLT-Logo: Ring Ivory, Blitz Amber mit leichtem Glühen."""
+    W, H = img.size
+    glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    for poly in _polys(_LOGO_BOLT, x, y, size):
+        gd.polygon(poly, fill=(255, 184, 63, 170))
+    img.alpha_composite(glow.filter(ImageFilter.GaussianBlur(max(2, size / 28))))
+    d = ImageDraw.Draw(img)
+    for poly in _polys(_LOGO_RING, x, y, size):
+        d.polygon(poly, fill=(242, 239, 232, 255))
+    for poly in _polys(_LOGO_BOLT, x, y, size):
+        d.polygon(poly, fill=(255, 184, 63, 255))
 
 
 def _spaced(draw, xy, text, font, fill, spacing):
@@ -3250,71 +3465,40 @@ def _spaced(draw, xy, text, font, fill, spacing):
 
 
 def render_welcome_card(display_name: str, username: str, avatar: bytes, member_no: int, seed: int) -> io.BytesIO:
-    rnd = random.Random(seed)
+    """Willkommenskarte im VOLT-Look: Karte mit VOLT-Schnitt, Profilbild im Ivory-Ring mit
+    VOLT-Logo, Name, Mitgliedsnummer groß als Kontur im Hintergrund. Keine Partikel, keine Zufallsblitze."""
     W, H = CARD_W, CARD_H
+    CUT = 56
     base = Image.new("RGBA", (W, H), (16, 17, 18, 255))
 
-    # Amber-Glühen hinter dem Profilbild, Position leicht zufällig
+    # ruhiges Amber-Glühen hinter dem Profilbild
+    cx, cy, r = 196, 200, 116
     glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    gd = ImageDraw.Draw(glow)
-    gx, gy = 200 + rnd.randint(-30, 30), 200 + rnd.randint(-30, 30)
-    gd.ellipse((gx - 260, gy - 260, gx + 260, gy + 260), fill=(255, 184, 63, 70))
-    gd.ellipse((W - 260 + rnd.randint(-60, 60), -180, W + 200, 260), fill=(255, 184, 63, 28))
-    base = Image.alpha_composite(base, glow.filter(ImageFilter.GaussianBlur(90)))
+    ImageDraw.Draw(glow).ellipse((cx - 210, cy - 210, cx + 210, cy + 210), fill=(255, 184, 63, 46))
+    base.alpha_composite(glow.filter(ImageFilter.GaussianBlur(80)))
 
-    # Diagonale Streifen wie auf der Website
+    # Diagonale Linien in Bronze wie auf Website und Bannern
     stripes = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     sd = ImageDraw.Draw(stripes)
     for x in range(-H, W + H, 46):
-        sd.line([(x, H), (x + int(H * 0.7), 0)], fill=(255, 184, 63, 18), width=1)
-    base = Image.alpha_composite(base, stripes)
+        sd.line([(x, H), (x + int(H * 0.53), 0)], fill=(146, 115, 75, 34), width=1)
+    base.alpha_composite(stripes)
 
-    # Blitze: Form, Anzahl und Lage hängen an der User-ID
-    bolts = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    bd = ImageDraw.Draw(bolts)
-    core = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    cd = ImageDraw.Draw(core)
-    sharp = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    hd = ImageDraw.Draw(sharp)
-    for i in range(rnd.randint(2, 3)):
-        x0 = rnd.uniform(720, W - 50)                 # rechts, damit der Name frei bleibt
-        x1 = min(W - 20, max(660, x0 + rnd.uniform(-170, 170)))
-        pts = _bolt_points(rnd, x0, -10, x1, rnd.uniform(H * .6, H + 20), 60)
-        bd.line(pts, fill=(255, 184, 63, 200), width=16, joint="curve")
-        hd.line(pts, fill=(255, 200, 102, 220), width=6, joint="curve")
-        cd.line(pts, fill=(255, 246, 228, 255), width=3, joint="curve")
-        # kleine Seitenarme
-        for _ in range(rnd.randint(1, 3)):
-            j = rnd.randint(8, len(pts) - 8)
-            sx, sy = pts[j]
-            br = _bolt_points(rnd, sx, sy, sx + rnd.uniform(-120, 120), sy + rnd.uniform(40, 120), 26)
-            bd.line(br, fill=(255, 184, 63, 150), width=8, joint="curve")
-            cd.line(br, fill=(255, 236, 200, 200), width=2, joint="curve")
-    base = Image.alpha_composite(base, bolts.filter(ImageFilter.GaussianBlur(10)))
-    base = Image.alpha_composite(base, sharp.filter(ImageFilter.GaussianBlur(2.5)))
-    base = Image.alpha_composite(base, core)
+    # Mitgliedsnummer groß als Kontur rechts im Hintergrund
+    num = f"#{member_no}"
+    big = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(big)
+    f_big = _font("Saira-BlackItalic.ttf", 230)
+    nw = bd.textlength(num, font=f_big)
+    bd.text((W - nw - 40, 40), num, font=f_big, fill=(0, 0, 0, 0), stroke_width=2, stroke_fill=(146, 115, 75, 120))
+    base.alpha_composite(big)
 
-    # Funken rund ums Profilbild
-    specks = ImageDraw.Draw(base)
-    cx, cy, r = 200, 200, 122
-    for _ in range(46):
-        a = rnd.uniform(0, math.tau)
-        rr = rnd.uniform(r + 14, r + 46)
-        px, py = cx + math.cos(a) * rr, cy + math.sin(a) * rr
-        ln = rnd.uniform(3, 11)
-        b = a + rnd.uniform(-.6, .6)
-        specks.line([(px, py), (px + math.cos(b) * ln, py + math.sin(b) * ln)],
-                    fill=(255, 190, 80, rnd.randint(70, 210)), width=rnd.choice((1, 2)))
-
-    # Ring mit Glühen
+    # Profilbild im Ivory-Ring, außen Amber-Schein
     ring = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    rd = ImageDraw.Draw(ring)
-    rd.ellipse((cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8), outline=(255, 184, 63, 255), width=10)
-    base = Image.alpha_composite(base, ring.filter(ImageFilter.GaussianBlur(10)))
-    rd2 = ImageDraw.Draw(base)
-    rd2.ellipse((cx - r - 6, cy - r - 6, cx + r + 6, cy + r + 6), fill=(16, 17, 18, 255), outline=(255, 184, 63, 255), width=5)
-
-    # Profilbild
+    ImageDraw.Draw(ring).ellipse((cx - r - 9, cy - r - 9, cx + r + 9, cy + r + 9), outline=(255, 184, 63, 200), width=8)
+    base.alpha_composite(ring.filter(ImageFilter.GaussianBlur(9)))
+    d = ImageDraw.Draw(base)
+    d.ellipse((cx - r - 7, cy - r - 7, cx + r + 7, cy + r + 7), fill=(16, 17, 18, 255), outline=(242, 239, 232, 255), width=5)
     try:
         av = Image.open(io.BytesIO(avatar)).convert("RGBA") if avatar else None
     except Exception:
@@ -3325,19 +3509,25 @@ def render_welcome_card(display_name: str, username: str, avatar: bytes, member_
         ImageDraw.Draw(mask).ellipse((0, 0, 2 * r - 1, 2 * r - 1), fill=255)
         base.paste(av, (cx - r, cy - r), mask)
     else:
-        bolt = [(cx + 18, cy - 70), (cx - 26, cy + 8), (cx - 2, cy + 8), (cx - 22, cy + 72), (cx + 26, cy - 8), (cx + 4, cy - 8)]
-        rd2.polygon(bolt, fill=(255, 184, 63, 255))
+        _draw_logo(base, cx - 82, cy - 82, 164)
+
+    # VOLT-Logo als Plakette unten rechts am Profilbild (ohne Profilbild steht das Logo schon im Kreis)
+    if av is not None:
+        bx, by, br = cx + 86, cy + 82, 42
+        d = ImageDraw.Draw(base)
+        d.ellipse((bx - br, by - br, bx + br, by + br), fill=(23, 24, 26, 255), outline=(58, 59, 63, 255), width=3)
+        _draw_logo(base, bx - 30, by - 30, 60)
 
     # Text
     d = ImageDraw.Draw(base)
-    tx = 375
-    f_eye = _font("Rajdhani-Bold.ttf", 30)
-    _spaced(d, (tx, 92), "WILLKOMMEN BEI VOLT", f_eye, RED + (255,), 6)
+    tx = 372
+    f_eye = _font("Rajdhani-Bold.ttf", 28)
+    _spaced(d, (tx, 96), "WILLKOMMEN BEI VOLT", f_eye, RED + (255,), 6)
     name = card_text(display_name) or card_text(username) or "Neues Mitglied"
     name = "".join(c for c in name.upper() if CARD_OK.match(c))
-    size = 92
+    size = 90
     f_name = _font("Saira-BlackItalic.ttf", size)
-    max_w = W - tx - 60
+    max_w = W - tx - 70
     while size > 40 and d.textlength(name, font=f_name) > max_w:
         size -= 4
         f_name = _font("Saira-BlackItalic.ttf", size)
@@ -3345,21 +3535,25 @@ def render_welcome_card(display_name: str, username: str, avatar: bytes, member_
         while len(name) > 4 and d.textlength(name + "…", font=f_name) > max_w:
             name = name[:-1]
         name = name.rstrip() + "…"
-    d.text((tx + 3, 140 + 3), name, font=f_name, fill=(255, 184, 63, 120))
-    d.text((tx, 140), name, font=f_name, fill=(242, 239, 232, 255))
-    f_sub = _font("Barlow-SemiBold.ttf", 30)
+    d.text((tx, 234), name, font=f_name, fill=(242, 239, 232, 255), anchor="ls")  # gleiche Grundlinie, auch bei kleiner Schrift
+    # schräger VOLT-Strich unter dem Namen
+    sy = 252
+    d.polygon([(tx + 8, sy), (tx + 84, sy), (tx + 76, sy + 8), (tx, sy + 8)], fill=RED + (255,))
+    f_sub = _font("Barlow-SemiBold.ttf", 29)
     sub = f"Mitglied #{member_no}" + (f"  ·  @{username}" if username else "")
-    d.text((tx, 256), sub, font=f_sub, fill=(207, 201, 189, 255))
-    d.rectangle((tx, 312, tx + 64, 316), fill=RED + (255,))
-    f_site = _font("Rajdhani-Bold.ttf", 24)
-    _spaced(d, (tx + 84, 300), SITE_LABEL.upper(), f_site, (184, 178, 166, 255), 4)
+    d.text((tx, 280), sub, font=f_sub, fill=(220, 215, 204, 255))
+    f_site = _font("Rajdhani-Bold.ttf", 22)
+    _spaced(d, (tx, 326), SITE_LABEL.upper(), f_site, (184, 178, 166, 255), 4)
 
-    # Abgerundete Karte mit dünnem Rahmen
+    # Karte mit VOLT-Schnitt oben rechts, dünner Rahmen, Amber-Kante am Schnitt
+    shape = [(0, 0), (W - CUT, 0), (W - 1, CUT), (W - 1, H - 1), (0, H - 1)]
     mask = Image.new("L", (W, H), 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, W - 1, H - 1), radius=30, fill=255)
+    ImageDraw.Draw(mask).polygon(shape, fill=255)
     card = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     card.paste(base, (0, 0), mask)
-    ImageDraw.Draw(card).rounded_rectangle((1, 1, W - 2, H - 2), radius=30, outline=(58, 59, 63, 255), width=2)
+    cd = ImageDraw.Draw(card)
+    cd.line(shape + [shape[0]], fill=(58, 59, 63, 255), width=2)
+    cd.line([(W - CUT, 1), (W - 2, CUT)], fill=RED + (255,), width=4)
     out = io.BytesIO()
     card.save(out, "PNG", optimize=True)
     out.seek(0)
@@ -3373,12 +3567,14 @@ async def welcome_payload(member: discord.Member):
     regeln = find_channel(guild, "regeln")
     steps = []
     if regeln:
-        steps.append(f"📜 Regeln lesen in {regeln.mention}")
-    steps.append(f"✅ Regeln akzeptieren in {verify.mention}" if verify else "✅ Regeln akzeptieren")
-    steps.append(f"🔎 Produkte mit Vorschau ansehen auf **[{SITE_LABEL}]({SITE_URL}/#produkte)**")
-    steps.append("🛒 Danach im Kanal **#bestellen** dein Produkt wählen")
+        steps.append(f"{ic('regeln', '📜')} Regeln lesen in {regeln.mention}")
+    steps.append(f"{ic('verify', '✅')} Regeln akzeptieren in {verify.mention}" if verify
+                 else f"{ic('verify', '✅')} Regeln akzeptieren")
+    steps.append(f"{ic('produkte', '🔎')} Produkte mit Vorschau ansehen auf **[{SITE_LABEL}]({SITE_URL}/#produkte)**")
+    bestellen = find_channel(guild, "bestellen")
+    steps.append(f"{ic('bestellen', '🛒')} Danach in {bestellen.mention if bestellen else '**#bestellen**'} dein Produkt wählen")
     e = discord.Embed(
-        title=f"⚡ Willkommen, {member.display_name}!",
+        title=f"{ic('volt', '⚡')} Willkommen, {member.display_name}!",
         description=(f"Schön, dass du da bist, {member.mention}! Du bist unser **{guild.member_count}. Mitglied**.\n\n"
                      + "\n".join(steps)),
         color=BRAND_COLOR, timestamp=discord.utils.utcnow())
@@ -3399,9 +3595,9 @@ async def welcome_payload(member: discord.Member):
     if file is None:
         e.set_thumbnail(url=member.display_avatar.url)
     v = discord.ui.View(timeout=None)
-    v.add_item(discord.ui.Button(label="Produkte ansehen", emoji="🔎", style=discord.ButtonStyle.link,
+    v.add_item(discord.ui.Button(label="Produkte ansehen", emoji=ic_emoji("produkte", "🔎"), style=discord.ButtonStyle.link,
                                  url=f"{SITE_URL}/#produkte"))
-    v.add_item(discord.ui.Button(label=SITE_LABEL, emoji="🌐", style=discord.ButtonStyle.link, url=SITE_URL))
+    v.add_item(discord.ui.Button(label=SITE_LABEL, emoji=ic_emoji("website", "🌐"), style=discord.ButtonStyle.link, url=SITE_URL))
     return e, file, v
 
 
@@ -4371,6 +4567,8 @@ async def on_invite_delete(invite: discord.Invite):
 
 @bot.event
 async def on_guild_emojis_update(guild: discord.Guild, before, after):
+    if guild == main_guild():
+        refresh_icon_map(guild)
     b, a = {e.id: e for e in before}, {e.id: e for e in after}
     f = []
     for i in a.keys() - b.keys():
@@ -4800,6 +4998,13 @@ async def sync_avatar():
             print(f"Profilbild ({kind}) nicht geändert:", ex)
 
 
+async def _design_in_background(guild: discord.Guild):
+    try:
+        await run_design(guild)
+    except Exception as ex:
+        print("VOLT-Design fehlgeschlagen:", repr(ex))
+
+
 @bot.event
 async def on_ready():
     global _cleaned_guild_commands
@@ -4820,7 +5025,12 @@ async def on_ready():
     # Nach einem Update mit neuen Panels: einmal automatisch neu posten (wie /panels)
     try:
         g = main_guild()
-        if g and await get_setting("panels_version") != PANELS_VERSION:
+        refresh_icon_map(g)
+        if g and await get_setting("design_version") != DESIGN_VERSION:
+            # Neues Design: Icons hochladen, Kanäle/Rollen anpassen, Panels neu posten (im Hintergrund,
+            # weil Discord Umbenennungen und Emoji-Uploads bremst)
+            asyncio.create_task(_design_in_background(g))
+        elif g and await get_setting("panels_version") != PANELS_VERSION:
             await set_setting("panels_version", PANELS_VERSION)
             await post_panels(g)
             print(f"Panels automatisch neu gepostet (Version {PANELS_VERSION}).")

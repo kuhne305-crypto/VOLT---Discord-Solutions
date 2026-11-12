@@ -1,0 +1,256 @@
+{
+ "order": [
+  "volt",
+  "owner",
+  "admin",
+  "support",
+  "kunde",
+  "user",
+  "bot",
+  "unverifiziert",
+  "regeln",
+  "willkommen",
+  "verify",
+  "stop",
+  "ankuendigung",
+  "status",
+  "uptime",
+  "website",
+  "bewertung",
+  "faq",
+  "portfolio",
+  "produkte",
+  "bestellen",
+  "ticket",
+  "team",
+  "aufgaben",
+  "logs",
+  "archiv",
+  "schutz",
+  "schloss",
+  "tuer",
+  "chat",
+  "familie",
+  "fussball",
+  "routen",
+  "allgemein",
+  "rollen",
+  "moderation",
+  "automod",
+  "level",
+  "aufstellung",
+  "streams",
+  "social",
+  "umfragen",
+  "giveaways",
+  "geburtstage",
+  "tempvoice",
+  "statistik",
+  "embeds",
+  "befehle",
+  "erinnerungen",
+  "statkanaele"
+ ],
+ "icons": {
+  "volt": {
+   "group": "marke",
+   "label": "VOLT-Logo"
+  },
+  "regeln": {
+   "group": "kanal",
+   "label": "Regeln"
+  },
+  "willkommen": {
+   "group": "kanal",
+   "label": "Willkommen"
+  },
+  "verify": {
+   "group": "kanal",
+   "label": "Verifizieren"
+  },
+  "stop": {
+   "group": "kanal",
+   "label": "Nicht schreiben"
+  },
+  "ankuendigung": {
+   "group": "kanal",
+   "label": "Ankündigungen"
+  },
+  "status": {
+   "group": "kanal",
+   "label": "Server-Status"
+  },
+  "uptime": {
+   "group": "kanal",
+   "label": "Uptime"
+  },
+  "website": {
+   "group": "kanal",
+   "label": "Website"
+  },
+  "bewertung": {
+   "group": "kanal",
+   "label": "Bewertungen"
+  },
+  "faq": {
+   "group": "kanal",
+   "label": "FAQ"
+  },
+  "portfolio": {
+   "group": "kanal",
+   "label": "Portfolio"
+  },
+  "produkte": {
+   "group": "kanal",
+   "label": "Produkte"
+  },
+  "bestellen": {
+   "group": "kanal",
+   "label": "Bestellen"
+  },
+  "ticket": {
+   "group": "kanal",
+   "label": "Tickets"
+  },
+  "team": {
+   "group": "kanal",
+   "label": "Team"
+  },
+  "aufgaben": {
+   "group": "kanal",
+   "label": "Aufgaben"
+  },
+  "logs": {
+   "group": "kanal",
+   "label": "Logs"
+  },
+  "archiv": {
+   "group": "kanal",
+   "label": "Archiv"
+  },
+  "schutz": {
+   "group": "kanal",
+   "label": "Schutz"
+  },
+  "schloss": {
+   "group": "kanal",
+   "label": "Admin"
+  },
+  "tuer": {
+   "group": "kanal",
+   "label": "Beitritte"
+  },
+  "chat": {
+   "group": "kanal",
+   "label": "Chat"
+  },
+  "owner": {
+   "group": "rang",
+   "label": "Owner"
+  },
+  "admin": {
+   "group": "rang",
+   "label": "Admin"
+  },
+  "support": {
+   "group": "rang",
+   "label": "Support"
+  },
+  "kunde": {
+   "group": "rang",
+   "label": "Kunde"
+  },
+  "user": {
+   "group": "rang",
+   "label": "User"
+  },
+  "bot": {
+   "group": "rang",
+   "label": "Bot"
+  },
+  "unverifiziert": {
+   "group": "rang",
+   "label": "Unverifiziert"
+  },
+  "familie": {
+   "group": "produkt",
+   "label": "Familien-Dashboard"
+  },
+  "fussball": {
+   "group": "produkt",
+   "label": "Fussball-Manager"
+  },
+  "routen": {
+   "group": "produkt",
+   "label": "Routen Manager"
+  },
+  "allgemein": {
+   "group": "modul",
+   "label": "Allgemein"
+  },
+  "rollen": {
+   "group": "modul",
+   "label": "Rollen"
+  },
+  "moderation": {
+   "group": "modul",
+   "label": "Moderation"
+  },
+  "automod": {
+   "group": "modul",
+   "label": "AutoMod"
+  },
+  "level": {
+   "group": "modul",
+   "label": "Level-System"
+  },
+  "aufstellung": {
+   "group": "modul",
+   "label": "Aufstellung"
+  },
+  "streams": {
+   "group": "modul",
+   "label": "Streams"
+  },
+  "social": {
+   "group": "modul",
+   "label": "Social Media"
+  },
+  "umfragen": {
+   "group": "modul",
+   "label": "Umfragen"
+  },
+  "giveaways": {
+   "group": "modul",
+   "label": "Giveaways"
+  },
+  "geburtstage": {
+   "group": "modul",
+   "label": "Geburtstage"
+  },
+  "tempvoice": {
+   "group": "modul",
+   "label": "Temp-Voice"
+  },
+  "statistik": {
+   "group": "modul",
+   "label": "Statistik"
+  },
+  "embeds": {
+   "group": "modul",
+   "label": "Embed-Builder"
+  },
+  "befehle": {
+   "group": "modul",
+   "label": "Eigene Befehle"
+  },
+  "erinnerungen": {
+   "group": "modul",
+   "label": "Erinnerungen"
+  },
+  "statkanaele": {
+   "group": "modul",
+   "label": "Statistik-Kanäle"
+  }
+ }
+}
