@@ -2933,6 +2933,139 @@ async def api_admin_uptime(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "name": name}, headers=nostore)
 
 
+# ===============================================================
+# ABSTURZ-MELDUNG PER DM
+# Jedes Projekt im VOLT System meldet Absturz, vollen Arbeitsspeicher und
+# fehlgeschlagene Updates an /api/system-hook. Angenommen wird nur, was aus
+# dem eigenen Workspace kommt (Railway-Variable VOLT_HOOK_WORKSPACE). Der
+# Owner bekommt eine DM; läuft der Dienst danach wieder, kommt eine Entwarnung.
+# Gleiche Meldung für denselben Dienst höchstens alle 15 Minuten, insgesamt
+# höchstens 20 DMs pro Stunde.
+# ===============================================================
+HOOK_WORKSPACE = os.environ.get("VOLT_HOOK_WORKSPACE", "").strip()
+HOOK_REPEAT = 15 * 60
+HOOK_MAX_PER_HOUR = 20
+HOOK_FAIL = {
+    "Deployment.crashed": ("💥", "ist abgestürzt",
+                           "Der Dienst ist im laufenden Betrieb abgestürzt. Das VOLT System startet ihn automatisch neu."),
+    "Deployment.oom_killed": ("🧠", "hatte zu wenig Arbeitsspeicher",
+                              "Der Dienst wurde beendet, weil der Arbeitsspeicher voll war. Er wird automatisch neu gestartet."),
+    "Deployment.failed": ("🛠️", "Update fehlgeschlagen",
+                          "Das neue Update ließ sich nicht bauen oder starten. Die vorherige Version bleibt aktiv."),
+}
+HOOK_OK = {"Deployment.deployed", "Deployment.redeployed", "Deployment.restarted", "Deployment.resumed"}
+HOOK_OLD_STATUS = {"CRASHED": "Deployment.crashed", "FAILED": "Deployment.failed", "SUCCESS": "Deployment.deployed"}
+_hook = {"down": {}, "last": {}, "sent": deque()}
+
+
+def _hook_event(data: dict):
+    """Railway-Meldung → (Typ, Infos) oder None, wenn sie nicht von uns kommt oder uninteressant ist."""
+    res = data.get("resource") if isinstance(data.get("resource"), dict) else {}
+    pick = lambda k: res.get(k) if isinstance(res.get(k), dict) else {}  # noqa: E731
+    ws, proj, env, svc = pick("workspace"), pick("project"), pick("environment"), pick("service")
+    if not HOOK_WORKSPACE or not hmac.compare_digest(str(ws.get("id") or "").encode(), HOOK_WORKSPACE.encode()):
+        return None
+    if env.get("isEphemeral"):
+        return ""
+    kind = str(data.get("type") or "")
+    if kind == "DEPLOY":  # altes Format
+        kind = HOOK_OLD_STATUS.get(str(data.get("status") or "").upper(), "")
+    if kind not in HOOK_FAIL and kind not in HOOK_OK:
+        return ""
+    details = data.get("details") if isinstance(data.get("details"), dict) else {}
+    return kind, {
+        "project": str(proj.get("name") or "Projekt")[:80], "project_id": str(proj.get("id") or "")[:64],
+        "service": str(svc.get("name") or proj.get("name") or "Dienst")[:80], "service_id": str(svc.get("id") or "")[:64],
+        "env": str(env.get("name") or "")[:40], "env_id": str(env.get("id") or "")[:64],
+        "commit": str(details.get("commitMessage") or "").strip().split("\n", 1)[0][:120],
+    }
+
+
+def _hook_link(info: dict) -> str:
+    if not info["project_id"]:
+        return ""
+    url = f"https://railway.com/project/{info['project_id']}"
+    if info["service_id"]:
+        url += f"/service/{info['service_id']}"
+    if info["env_id"]:
+        url += f"?environmentId={info['env_id']}"
+    return url
+
+
+def _hook_embed(kind: str, info: dict):
+    """Baut die DM. None = nichts schicken (Wiederholung oder normales Update ohne vorherigen Ausfall)."""
+    now = time.time()
+    key = info["service_id"] or info["service"]
+    down = _hook["down"]
+    if kind in HOOK_FAIL:
+        state = None
+        if kind != "Deployment.failed":  # fehlgeschlagenes Update: alte Version läuft weiter, also kein Ausfall
+            state = down.setdefault(key, {"since": now, "count": 0})
+            state["count"] += 1
+        last = _hook["last"].get((key, kind), 0)
+        if now - last < HOOK_REPEAT:
+            return None
+        _hook["last"][(key, kind)] = now
+        icon, what, text = HOOK_FAIL[kind]
+        e = emb(f"{icon} {info['service']} {what}", text, C_STOERUNG)
+        if state and state["count"] > 1:
+            e.add_field(name="Ausfälle", value=f"{state['count']}× seit <t:{int(state['since'])}:R>", inline=True)
+    else:
+        state = down.pop(key, None)
+        if not state or now - state["since"] > 24 * 3600:
+            return None
+        e = emb(f"🟢 {info['service']} läuft wieder", f"Ausfall hat etwa {fmt_long(now - state['since'])} gedauert.",
+                C_ONLINE)
+    e.add_field(name="Projekt", value=info["project"], inline=True)
+    if info["env"] and info["env"] != "production":
+        e.add_field(name="Umgebung", value=info["env"], inline=True)
+    if info["commit"]:
+        e.add_field(name="Letztes Update", value=info["commit"], inline=False)
+    link = _hook_link(info)
+    if link:
+        e.add_field(name="Log", value=f"[Im VOLT System öffnen]({link})", inline=False)
+    return e
+
+
+async def _hook_send(e: discord.Embed):
+    sent = _hook["sent"]
+    now = time.time()
+    while sent and now - sent[0] > 3600:
+        sent.popleft()
+    if len(sent) >= HOOK_MAX_PER_HOUR:
+        print("Absturz-Meldung: Limit pro Stunde erreicht, DM ausgelassen:", e.title)
+        return
+    sent.append(now)
+    try:
+        owner = bot.get_user(OWNER_ID) or await bot.fetch_user(OWNER_ID)
+        await owner.send(embed=e)
+    except discord.HTTPException as ex:
+        print("Absturz-Meldung: DM ging nicht raus:", repr(ex))
+
+
+async def api_system_hook(request: web.Request) -> web.Response:
+    nostore = {"Cache-Control": "no-store"}
+    if (request.content_length or 0) > 65536:
+        return web.json_response({"ok": False}, status=413, headers=nostore)
+    try:
+        data = await request.json()
+        if not isinstance(data, dict):
+            raise ValueError
+    except Exception:
+        return web.json_response({"ok": False}, status=400, headers=nostore)
+    ev = _hook_event(data)
+    if ev is None:
+        return web.json_response({"ok": False}, status=403, headers=nostore)
+    if ev:
+        kind, info = ev
+        if kind in HOOK_FAIL:
+            print(f"Absturz-Meldung: {kind} · {info['project']} / {info['service']}")
+        e = _hook_embed(kind, info)
+        if e is not None:
+            asyncio.create_task(_hook_send(e))
+    return web.json_response({"ok": True}, headers=nostore)
+
+
 # ---------- Befehle ----------
 bots_group = app_commands.Group(name="bots", description="Bots, die ihren Status an die Website melden (nur Owner)",
                                 guild_only=True, default_permissions=discord.Permissions(administrator=True))
@@ -4574,6 +4707,7 @@ async def start_website():
     app.router.add_post("/api/heartbeat", api_heartbeat)
     app.router.add_post("/api/admin/bots", api_admin_bots)
     app.router.add_post("/api/admin/uptime", api_admin_uptime)
+    app.router.add_post("/api/system-hook", api_system_hook)
     app.router.add_get("/health", site_health)
     app.router.add_get("/robots.txt", site_robots)
     app.router.add_get("/sitemap.xml", site_sitemap)
