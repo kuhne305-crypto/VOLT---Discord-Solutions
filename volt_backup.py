@@ -6,7 +6,7 @@
 - Gepostet wird mit klarer Überschrift „🗄️ Backup · <Projekt>“ über den eigenen Bot in den Channel BACKUP_CHANNEL_ID
   (Standard: der VOLT-Backup-Channel). Ist BACKUP_WEBHOOK_URL gesetzt, geht es stattdessen über diesen Webhook.
 - Über 9,5 MB wird die Datei in Teile zerlegt (Discord-Grenze 10 MB). Ordner, die zu groß sind, kommen sonntags separat.
-- Ist der Bot nicht auf dem Backup-Server, steht im Log ein Einladungslink.
+- Ist der Bot nicht auf dem Backup-Server, steht im Log ein Einladungslink; bis es klappt, wird alle 15 Minuten neu versucht.
 """
 import asyncio
 import io
@@ -138,15 +138,19 @@ class Backup:
     async def _loop(self) -> None:
         await self.client.wait_until_ready()
         await asyncio.sleep(90)
+        ok = True
         if time.time() - self.last() > 23 * 3600:
-            await self.run("nach dem Start")
+            ok, _ = await self.run("nach dem Start")
         while not self.client.is_closed():
             now = datetime.now(TZ)
             nxt = now.replace(hour=HOUR, minute=0, second=0, microsecond=0)
             if nxt <= now:
                 nxt += timedelta(days=1)
-            await asyncio.sleep(max(60, (nxt - now).total_seconds()))
-            await self.run("täglich")
+            wait = (nxt - now).total_seconds()
+            if not ok:  # z. B. Bot noch nicht auf dem VOLT-Server: alle 15 Minuten neu versuchen
+                wait = min(wait, 15 * 60)
+            await asyncio.sleep(max(60, wait))
+            ok, _ = await self.run("täglich" if datetime.now(TZ).hour == HOUR else "erneuter Versuch")
 
     # ------------------------------------------------------------------ Sichern + senden
     def _name(self) -> str:
