@@ -1474,7 +1474,7 @@ class ReviewView(discord.ui.View):
 # per /design). Nichts wird gelöscht: bestehende Kanäle und Rollen werden nur
 # umbenannt bzw. umgefärbt, fehlende Icons werden hochgeladen.
 # ===============================================================
-DESIGN_VERSION = "2026-11-12b"
+DESIGN_VERSION = "2026-11-12c"
 ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "assets", "icons")
 BANNER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "assets", "img", "discord-banner.png")
 ICON_EMOJIS: dict[str, discord.Emoji] = {}   # Icon-Name (ohne „v_“) -> Server-Emoji
@@ -1553,6 +1553,14 @@ def _design_targets():
 
 
 SEP_CHARS = re.compile(r"\s*[│|┃｜︱]\s*")   # alle Varianten von „|“ werden zu „・“
+NAME_START = re.compile(r"^[^0-9a-zA-ZäöüÄÖÜß]+")   # Emoji und Trenner vor dem eigentlichen Namen
+# Weitere eigene Kanäle auf dem VOLT-Server: Emoji passend zum Icon-Set
+EXTRA_CHANNEL_EMOJI = {
+    "fraktion-dashboard": "🏠", "volt-bot": "🤖", "volt-studio": "📺", "volt-studio-tester-chat": "🧪",
+    "routen-manager": "📍", "fussball-manager": "⚽", "vorschläge": "💡", "chat": "💬", "preisliste": "🏷️",
+    "kosten-übersicht": "💳", "changelogs": "📝", "ticket": "🎫", "backups": "🗃️", "to-do-liste": "📌",
+    "Warteraum": "⏳", "VOLT · Werkstatt": "🛠️", "ATLAXX · Privat": "🔒",
+}
 
 
 def swap_sep(name: str) -> str:
@@ -1561,7 +1569,7 @@ def swap_sep(name: str) -> str:
 
 async def apply_design(guild: discord.Guild) -> dict:
     st = {"kat": 0, "kanal": 0, "ticket": 0, "trenner": 0, "rollen": 0, "rollen_icons": 0, "banner": None,
-          "fehler": 0, "andere": []}
+          "fehler": 0, "andere": [], "andere_rollen": []}
     cats, chans = _design_targets()
     done: set[int] = set()   # in diesem Lauf schon geändert (der Cache kennt den neuen Namen erst etwas später)
 
@@ -1586,7 +1594,7 @@ async def apply_design(guild: discord.Guild) -> dict:
 
     # Feste Kanäle: nur wenn der Name ohne Emoji/Trenner genau passt (Kunden-Kanäle bleiben unberührt)
     for ch in guild.text_channels:
-        rest = re.sub(r"^[^0-9a-zäöüß]+", "", ch.name)
+        rest = NAME_START.sub("", ch.name)
         new = chans.get(rest)
         if new and ch.name != new:
             await rename(ch, new, "kanal")
@@ -1602,14 +1610,15 @@ async def apply_design(guild: discord.Guild) -> dict:
         if ch.name != new and not rename_wait(ch.id):
             await rename(ch, new, "ticket")
 
-    # Alle übrigen Kanäle und Kategorien: jedes „|“ / „│“ wird zu „・“
+    # Alle übrigen Kanäle und Kategorien: eigene Kanäle bekommen ihr Emoji, jedes „|“ / „│“ wird zu „・“
     for ch in guild.channels:
         if ch.id in done:
             continue
-        new = swap_sep(ch.name)
+        rest = NAME_START.sub("", ch.name)
+        new = f"{EXTRA_CHANNEL_EMOJI[rest]}{SEP}{rest}" if rest in EXTRA_CHANNEL_EMOJI else swap_sep(ch.name)
         if new != ch.name and not rename_wait(ch.id):
             await rename(ch, new, "trenner")
-        is_known = re.sub(r"^[^0-9a-zäöüß]+", "", ch.name) in chans
+        is_known = rest in chans or rest in EXTRA_CHANNEL_EMOJI
         if not isinstance(ch, discord.CategoryChannel) and ch.id not in ticket_ids and not is_known \
                 and not ch.name.startswith(("👥 Mitglieder:", "⭐ Bewertungen:")) and "Status:" not in ch.name:
             st["andere"].append(new)
@@ -1640,10 +1649,13 @@ async def apply_design(guild: discord.Guild) -> dict:
                 st["fehler"] += 1
                 print(f"Design: Rolle {role.name} nicht geändert:", ex)
     # weitere Rollen mit „|“ im Namen
+    own = role_names(*ROLE_NAMES)
     for role in guild.roles:
         if role.id in done or role.is_default() or role.managed or role >= guild.me.top_role:
             continue
         new = swap_sep(role.name)
+        if role.name not in own:
+            st["andere_rollen"].append(new)
         if new != role.name:
             try:
                 await role.edit(name=new, reason="VOLT Design")
@@ -1679,7 +1691,9 @@ async def run_design(guild: discord.Guild) -> str:
            + f"\nBanner: {st['banner']}" + (f"\nFehler: {st['fehler']}" if st["fehler"] else ""))
     print("VOLT-Design angewendet:\n" + msg)
     if st["andere"]:
-        print("Weitere Kanäle (eigene Emojis bleiben):", " | ".join(st["andere"]))
+        print("Weitere Kanäle (eigene Emojis bleiben):", " / ".join(st["andere"]))
+    if st["andere_rollen"]:
+        print("Weitere Rollen:", " / ".join(st["andere_rollen"]))
     await log(guild, "admin-logs", emb(f"{ic('volt', '⚡')} VOLT-Design angewendet", msg))
     return msg
 
