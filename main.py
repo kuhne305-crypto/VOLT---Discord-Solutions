@@ -1474,7 +1474,7 @@ class ReviewView(discord.ui.View):
 # per /design). Nichts wird gelöscht: bestehende Kanäle und Rollen werden nur
 # umbenannt bzw. umgefärbt, fehlende Icons werden hochgeladen.
 # ===============================================================
-DESIGN_VERSION = "2026-11-12c"
+DESIGN_VERSION = "2026-11-12d"
 ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "assets", "icons")
 BANNER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "assets", "img", "discord-banner.png")
 ICON_EMOJIS: dict[str, discord.Emoji] = {}   # Icon-Name (ohne „v_“) -> Server-Emoji
@@ -1559,8 +1559,10 @@ EXTRA_CHANNEL_EMOJI = {
     "fraktion-dashboard": "🏠", "volt-bot": "🤖", "volt-studio": "📺", "volt-studio-tester-chat": "🧪",
     "routen-manager": "📍", "fussball-manager": "⚽", "vorschläge": "💡", "chat": "💬", "preisliste": "🏷️",
     "kosten-übersicht": "💳", "changelogs": "📝", "ticket": "🎫", "backups": "🗃️", "to-do-liste": "📌",
-    "Warteraum": "⏳", "VOLT · Werkstatt": "🛠️", "ATLAXX · Privat": "🔒",
+    "Warteraum": "⏳", "VOLT · Werkstatt": "🛠️", "ATLAXX · Privat": "🔒", "Privat VC": "🔒",
 }
+# Weitere eigene Rollen: Emoji passend zum Icon-Set bzw. zur Website (💛 = Spenden)
+EXTRA_ROLE_EMOJI = {"Spender": "💛", "Tester": "🧪", "Partner": "🤝"}
 
 
 def swap_sep(name: str) -> str:
@@ -1654,7 +1656,10 @@ async def apply_design(guild: discord.Guild) -> dict:
         if role.id in done or role.is_default() or role.managed or role >= guild.me.top_role:
             continue
         new = swap_sep(role.name)
-        if role.name not in own:
+        rest = NAME_START.sub("", role.name)
+        if rest in EXTRA_ROLE_EMOJI:
+            new = f"{EXTRA_ROLE_EMOJI[rest]} {rest}"
+        elif role.name not in own:
             st["andere_rollen"].append(new)
         if new != role.name:
             try:
