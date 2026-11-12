@@ -91,18 +91,25 @@ pool = None  # DB-Objekt, wird im setup_hook gesetzt
 # Rollenfarben im VOLT-Look: vom Amber (Owner) über Bronze bis zu den neutralen Tönen
 ROLES = [
     ("owner", "👑 Owner", 0xFFB83F, discord.Permissions(administrator=True), True),
-    ("admin", "🛡️ Admin", 0xD99A35, discord.Permissions(administrator=True), True),
-    ("support", "🔧 Support", 0xC29A5B, discord.Permissions(
+    ("admin", "🎖️ Admin", 0xD99A35, discord.Permissions(administrator=True), True),
+    ("support", "🎧 Support", 0xC29A5B, discord.Permissions(
         manage_messages=True, moderate_members=True, kick_members=True), True),
     ("kunde", "💼 Kunde", 0xF2EFE8, discord.Permissions.none(), True),
-    ("user", "✅ User", 0xB8B2A6, discord.Permissions.none(), False),
+    ("user", "👤 User", 0xB8B2A6, discord.Permissions.none(), False),
     ("bots", "🤖 Bots", 0x92734B, discord.Permissions.none(), False),
-    ("unverified", "⛔ Unverifiziert", 0x6B6862, discord.Permissions.none(), False),
+    ("unverified", "❔ Unverifiziert", 0x6B6862, discord.Permissions.none(), False),
 ]
 # Icon aus dem VOLT-Icon-Set pro Rolle (Rollen-Icons gehen erst ab Server-Boost Stufe 2)
 ROLE_ICON = {"owner": "owner", "admin": "admin", "support": "support", "kunde": "kunde",
              "user": "user", "bots": "bot", "unverified": "unverifiziert"}
 ROLE_NAMES = {k: n for k, n, *_ in ROLES}
+# Frühere Namen (vor dem VOLT-Design): so werden bestehende Rollen weiter gefunden und umbenannt
+ROLE_OLD_NAMES = {"admin": ["🛡️ Admin"], "support": ["🔧 Support"], "user": ["✅ User"],
+                  "unverified": ["⛔ Unverifiziert"]}
+
+
+def role_names(*keys) -> set:
+    return {n for k in keys for n in [ROLE_NAMES[k], *ROLE_OLD_NAMES.get(k, [])]}
 ROLE_CACHE: dict[int, dict[str, discord.Role]] = {}
 
 
@@ -110,13 +117,17 @@ def find_role(guild: discord.Guild, key: str):
     cached = ROLE_CACHE.get(guild.id, {}).get(key)
     if cached and guild.get_role(cached.id):
         return cached
-    return discord.utils.get(guild.roles, name=ROLE_NAMES[key])
+    for name in [ROLE_NAMES[key], *ROLE_OLD_NAMES.get(key, [])]:
+        role = discord.utils.get(guild.roles, name=name)
+        if role:
+            return role
+    return None
 
 
 def has_team_role(member: discord.Member) -> bool:
     if member.id == OWNER_ID or member.id == member.guild.owner_id:
         return True
-    names = {ROLE_NAMES["owner"], ROLE_NAMES["admin"], ROLE_NAMES["support"]}
+    names = role_names("owner", "admin", "support")
     return any(r.name in names for r in member.roles)
 
 
@@ -201,36 +212,36 @@ STRUCTURE = [
         ("⭐ Bewertungen: bald verfügbar", "voice"),
     ]),
     ("／ WILLKOMMEN", "public", [
-        (f"📜{SEP}regeln", "text"),
+        (f"📄{SEP}regeln", "text"),
         (f"👋{SEP}willkommen", "text"),
-        (f"⚡{SEP}verify", "text"),
+        (f"✅{SEP}verify", "text"),
         (f"⛔{SEP}nicht-schreiben", "text", "honeypot"),
     ]),
     ("／ INFOS", "verified", [
-        (f"🔔{SEP}ankündigungen", "text"),
-        (f"📟{SEP}server-status", "text"),
-        (f"📡{SEP}uptime", "text"),
-        (f"🔗{SEP}website", "text"),
+        (f"📢{SEP}ankündigungen", "text"),
+        (f"📊{SEP}server-status", "text"),
+        (f"📶{SEP}uptime", "text"),
+        (f"🌐{SEP}website", "text"),
         (f"⭐{SEP}bewertungen", "text"),
-        (f"💡{SEP}faq", "text"),
+        (f"❔{SEP}faq", "text"),
         (f"🖼️{SEP}portfolio", "text"),
     ]),
     ("／ SHOP", "verified", [
-        (f"🏷️{SEP}produkte", "text"),
+        (f"📦{SEP}produkte", "text"),
         (f"🛒{SEP}bestellen", "text"),
     ]),
     ("🟡 OFFENE TICKETS", "ticket", []),
     ("🔵 IN BEARBEITUNG", "ticket", []),
     ("🟢 LAUFENDE PROJEKTE", "ticket", []),
     ("🟠 WARTUNG", "ticket", []),
-    ("📦 ARCHIV", "ticket", []),
+    ("🗃️ ARCHIV", "ticket", []),
     ("／ TEAM-INTERN", "team", [
         (f"💬{SEP}team-chat", "text"),
         (f"📋{SEP}aufgaben", "text"),
     ]),
     ("／ LOGS", "admin", [
-        (f"🔐{SEP}admin-logs", "text"),
-        (f"🗂️{SEP}ticket-logs", "text"),
+        (f"🔒{SEP}admin-logs", "text"),
+        (f"🎫{SEP}ticket-logs", "text"),
         (f"🛡️{SEP}mod-logs", "text"),
         (f"🚪{SEP}join-leave-logs", "text"),
     ]),
@@ -552,7 +563,7 @@ STATUS = {
     "maintenance": ("🟠", "WARTUNG", "In Wartungsmodus"),
     "paused":      ("⏳", "IN BEARBEITUNG", "Pausiert / wartet auf dich"),
     "rejected":    ("🔴", "ARCHIV", "Abgelehnt"),
-    "archived":    ("📦", "ARCHIV", "Archiviert"),
+    "archived":    ("🗃️", "ARCHIV", "Archiviert"),
 }
 STATUS_TEXT = {
     "waiting": "Deine Anfrage steht auf der Warteliste.",
@@ -1463,7 +1474,7 @@ class ReviewView(discord.ui.View):
 # per /design). Nichts wird gelöscht: bestehende Kanäle und Rollen werden nur
 # umbenannt bzw. umgefärbt, fehlende Icons werden hochgeladen.
 # ===============================================================
-DESIGN_VERSION = "2026-11-12a"
+DESIGN_VERSION = "2026-11-12b"
 ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "assets", "icons")
 BANNER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "assets", "img", "discord-banner.png")
 ICON_EMOJIS: dict[str, discord.Emoji] = {}   # Icon-Name (ohne „v_“) -> Server-Emoji
@@ -1541,14 +1552,24 @@ def _design_targets():
     return cats, chans
 
 
+SEP_CHARS = re.compile(r"\s*[│|┃｜︱]\s*")   # alle Varianten von „|“ werden zu „・“
+
+
+def swap_sep(name: str) -> str:
+    return SEP_CHARS.sub(SEP, name)
+
+
 async def apply_design(guild: discord.Guild) -> dict:
-    st = {"kat": 0, "kanal": 0, "ticket": 0, "rollen": 0, "rollen_icons": 0, "banner": None, "fehler": 0}
+    st = {"kat": 0, "kanal": 0, "ticket": 0, "trenner": 0, "rollen": 0, "rollen_icons": 0, "banner": None,
+          "fehler": 0, "andere": []}
     cats, chans = _design_targets()
+    done: set[int] = set()   # in diesem Lauf schon geändert (der Cache kennt den neuen Namen erst etwas später)
 
     async def rename(obj, name, key):
         try:
             await obj.edit(name=name, reason="VOLT Design")
             st[key] += 1
+            done.add(obj.id)
             if isinstance(obj, discord.TextChannel):
                 rename_log[obj.id].append(time.time())
         except discord.HTTPException as ex:
@@ -1570,22 +1591,39 @@ async def apply_design(guild: discord.Guild) -> dict:
         if new and ch.name != new:
             await rename(ch, new, "kanal")
 
-    # Ticket-Kanäle bekommen den neuen Trenner
+    # Ticket-Kanäle: Status-Emoji + neuer Trenner
+    ticket_ids = set()
     for t in await pool.fetch("SELECT channel_id, slug, status FROM tickets WHERE status <> 'deleted'"):
         ch = guild.get_channel(t["channel_id"])
         if not isinstance(ch, discord.TextChannel) or t["status"] not in STATUS or not t["slug"]:
             continue
+        ticket_ids.add(ch.id)
         new = f"{STATUS[t['status']][0]}{SEP}{t['slug']}"
         if ch.name != new and not rename_wait(ch.id):
             await rename(ch, new, "ticket")
 
-    # Rollen: Farben aus der VOLT-Palette, Rollen-Icons wenn der Server sie kann (Boost Stufe 2)
+    # Alle übrigen Kanäle und Kategorien: jedes „|“ / „│“ wird zu „・“
+    for ch in guild.channels:
+        if ch.id in done:
+            continue
+        new = swap_sep(ch.name)
+        if new != ch.name and not rename_wait(ch.id):
+            await rename(ch, new, "trenner")
+        is_known = re.sub(r"^[^0-9a-zäöüß]+", "", ch.name) in chans
+        if not isinstance(ch, discord.CategoryChannel) and ch.id not in ticket_ids and not is_known \
+                and not ch.name.startswith(("👥 Mitglieder:", "⭐ Bewertungen:")) and "Status:" not in ch.name:
+            st["andere"].append(new)
+
+    # Rollen: Name (Emoji passend zum Icon-Set), Farbe aus der VOLT-Palette,
+    # Rollen-Icons wenn der Server sie kann (Boost Stufe 2)
     icons_ok = "ROLE_ICONS" in guild.features
     for key, name, color, _, _ in ROLES:
         role = find_role(guild, key)
         if role is None or role >= guild.me.top_role:
             continue
         kw = {}
+        if role.name != name:
+            kw["name"] = name
         if role.colour.value != color:
             kw["colour"] = discord.Colour(color)
         if icons_ok:
@@ -1597,9 +1635,22 @@ async def apply_design(guild: discord.Guild) -> dict:
                 await role.edit(reason="VOLT Design", **kw)
                 st["rollen"] += 1
                 st["rollen_icons"] += 1 if "display_icon" in kw else 0
+                done.add(role.id)
             except discord.HTTPException as ex:
                 st["fehler"] += 1
                 print(f"Design: Rolle {role.name} nicht geändert:", ex)
+    # weitere Rollen mit „|“ im Namen
+    for role in guild.roles:
+        if role.id in done or role.is_default() or role.managed or role >= guild.me.top_role:
+            continue
+        new = swap_sep(role.name)
+        if new != role.name:
+            try:
+                await role.edit(name=new, reason="VOLT Design")
+                st["rollen"] += 1
+            except discord.HTTPException as ex:
+                st["fehler"] += 1
+                print(f"Design: Rolle {role.name} nicht umbenannt:", ex)
 
     # Server-Banner (geht erst ab Boost Stufe 2)
     if "BANNER" in guild.features:
@@ -1622,10 +1673,13 @@ async def run_design(guild: discord.Guild) -> str:
     await set_setting("panels_version", PANELS_VERSION)
     msg = (f"Icons: {created} hochgeladen, {len(ICON_EMOJIS)} aktiv"
            + (f", {missing} ohne freien Emoji-Platz" if missing else "") + "\n"
-           f"Umbenannt: {st['kat']} Kategorien, {st['kanal']} Kanäle, {st['ticket']} Ticket-Kanäle\n"
+           f"Umbenannt: {st['kat']} Kategorien, {st['kanal']} Kanäle, {st['ticket']} Ticket-Kanäle, "
+           f"{st['trenner']} weitere mit neuem Trenner\n"
            f"Rollen angepasst: {st['rollen']}" + (f" (davon {st['rollen_icons']} mit Icon)" if st['rollen_icons'] else "")
            + f"\nBanner: {st['banner']}" + (f"\nFehler: {st['fehler']}" if st["fehler"] else ""))
     print("VOLT-Design angewendet:\n" + msg)
+    if st["andere"]:
+        print("Weitere Kanäle (eigene Emojis bleiben):", " | ".join(st["andere"]))
     await log(guild, "admin-logs", emb(f"{ic('volt', '⚡')} VOLT-Design angewendet", msg))
     return msg
 
@@ -4055,7 +4109,7 @@ async def on_member_ban(guild, user):
 async def on_member_update(before: discord.Member, after: discord.Member):
     """Schutz: Owner-/Admin-Rolle darf nur vom Owner vergeben werden."""
     guild = after.guild
-    protected = {ROLE_NAMES["owner"], ROLE_NAMES["admin"]}
+    protected = role_names("owner", "admin")
     gained = [r for r in after.roles if r not in before.roles and r.name in protected]
     if not gained:
         return
