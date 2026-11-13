@@ -61,7 +61,7 @@ VOLT_SYSTEM_PARTS = ("Compute", "Networking — Public", "Networking — Private
 # Optional: Schlüssel für die Verwaltung per HTTP (Bots anlegen, Dienste überwachen). Leer = aus.
 ADMIN_API_KEY = os.environ.get("VOLT_ADMIN_KEY", "").strip()
 # Wird diese Nummer erhöht, postet der Bot nach dem nächsten Start einmal alle Panels neu (wie /panels).
-PANELS_VERSION = "2026-11-12a"
+PANELS_VERSION = "2026-11-13a"
 
 MIN_ACCOUNT_AGE_DAYS = int(os.environ.get("MIN_ACCOUNT_AGE_DAYS", "3"))  # 0 = aus
 RAID_JOINS = int(os.environ.get("RAID_JOINS", "6"))      # so viele Joins ...
@@ -564,6 +564,7 @@ STATUS = {
     "paused":      ("⏳", "IN BEARBEITUNG", "Pausiert / wartet auf dich"),
     "rejected":    ("🔴", "ARCHIV", "Abgelehnt"),
     "archived":    ("🗃️", "ARCHIV", "Archiviert"),
+    "support":     ("❔", "OFFENE TICKETS", "Support-Frage"),
 }
 STATUS_TEXT = {
     "waiting": "Deine Anfrage steht auf der Warteliste.",
@@ -749,6 +750,98 @@ class FaqView(discord.ui.View):
     async def pick(self, interaction: discord.Interaction, select: discord.ui.Select):
         q = list(FAQ)[int(select.values[0])]
         await interaction.response.send_message(embed=emb(f"❓ {q}", FAQ[q]), ephemeral=True)
+
+    @discord.ui.button(label="Frage nicht dabei? Support-Ticket öffnen", emoji="❔", row=1,
+                       style=discord.ButtonStyle.secondary, custom_id="volt:faq:support")
+    async def support(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await open_support(interaction)
+
+
+# ===============================================================
+# SUPPORT-TICKETS: neutrale Fragen für alle, ohne Server-Abfrage und ohne Fragebogen
+# ===============================================================
+class SupportModal(discord.ui.Modal, title="Support-Anfrage"):
+    subject = discord.ui.TextInput(label="Worum geht es?", min_length=3, max_length=60,
+                                   placeholder="z. B. Frage zum VOLT Bot")
+    message = discord.ui.TextInput(label="Dein Anliegen", style=discord.TextStyle.paragraph, min_length=10,
+                                   max_length=1500, placeholder="Schreib direkt rein, wobei wir dir helfen können.")
+
+    async def on_submit(self, interaction: discord.Interaction):
+        guild, member = interaction.guild, interaction.user
+        if len(re.findall(r"[0-9A-Za-zÄÖÜäöüß]", self.message.value)) < 8:
+            return await interaction.response.send_message(
+                "❌ Beschreib dein Anliegen bitte kurz in ein paar Worten.", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        n = await pool.fetchval(
+            "SELECT count(*) FROM tickets WHERE user_id=$1 AND status NOT IN ('archived','rejected','deleted')",
+            member.id)
+        if n >= MAX_OPEN_TICKETS:
+            return await interaction.followup.send(
+                f"❌ Du hast schon {n} offene Tickets (Maximum {MAX_OPEN_TICKETS}).", ephemeral=True)
+        subject, text = self.subject.value.strip(), self.message.value.strip()
+        slug = slugify(f"support-{member.name}")
+        ow = ticket_overwrites(guild, member)
+        sup = find_role(guild, "support")
+        if sup:   # Helfer übernehmen die Erstantwort
+            ow[sup] = discord.PermissionOverwrite(view_channel=True, read_message_history=True, send_messages=True,
+                                                  attach_files=True, embed_links=True)
+        channel = await guild.create_text_channel(
+            f"{STATUS['support'][0]}{SEP}{slug}", category=find_category(guild, "OFFENE TICKETS"), overwrites=ow,
+            topic=f"Support von {member} | {subject}"[:1024], reason="VOLT Support")
+        tid = await pool.fetchval(
+            """INSERT INTO tickets (channel_id,user_id,project_type,project_name,slug,description,platform,status)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id""",
+            channel.id, member.id, "Support", subject, slug, text, "Support", "support")
+        invalidate_site_cache()
+        e = emb(f"{ic('faq', '❔')} Support #{tid} – {subject}", text[:4000])
+        e.add_field(name="Von", value=member.mention, inline=True)
+        await channel.send(
+            content=f"<@{OWNER_ID}>{' ' + sup.mention if sup else ''} {member.mention}\n"
+                    f"Danke für deine Nachricht! Schreib gern noch Details oder Screenshots dazu. "
+                    f"Sobald das Team antwortet, bekommst du eine DM.",
+            embed=e, view=SupportTicketView(),
+            allowed_mentions=discord.AllowedMentions(users=True, roles=True))
+        await interaction.followup.send(f"✅ Dein Support-Ticket wurde erstellt: {channel.mention}", ephemeral=True)
+        await log(guild, "ticket-logs", emb("❔ Support-Ticket geöffnet",
+                                            f"#{tid} · {subject} · {member.mention}\n{channel.mention}"))
+
+
+async def open_support(interaction: discord.Interaction):
+    if not await ticket_allowed(interaction):
+        return
+    await interaction.response.send_modal(SupportModal())
+
+
+class SupportTicketView(discord.ui.View):
+    """Im Support-Ticket: Ersteller, Helfer oder Owner schließen es mit „Erledigt“."""
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Erledigt", emoji="✅", style=discord.ButtonStyle.success, custom_id="volt:s:done")
+    async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
+        ticket = await get_ticket(interaction.channel.id)
+        if not ticket or ticket["status"] != "support":
+            return await interaction.response.send_message("❌ Dieses Support-Ticket ist schon geschlossen.",
+                                                           ephemeral=True)
+        user = interaction.user
+        if not (user.id == ticket["user_id"] or has_team_role(user)):
+            return await interaction.response.send_message("❌ Keine Berechtigung.", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
+        try:
+            f = await make_transcript(interaction.channel, ticket)
+            await log(interaction.guild, "ticket-logs",
+                      emb("✅ Support erledigt", f"#{ticket['id']} · {ticket['project_name']} · geschlossen von {user.mention}"),
+                      file=f)
+        except discord.HTTPException:
+            pass
+        _, delayed = await apply_status(interaction.guild, interaction.channel, ticket, "archived")
+        await interaction.channel.send(embed=emb("✅ Erledigt", "Dieses Support-Ticket ist geschlossen. "
+                                                              "Neue Frage? Einfach wieder auf **Support / Frage** klicken."))
+        if user.id != ticket["user_id"]:
+            await notify_ticket_owner(interaction.guild, ticket, "✅ Support-Ticket geschlossen",
+                                      f"Dein Support-Ticket **{ticket['project_name']}** wurde als erledigt markiert.",
+                                      force=True, author=user)
+        await interaction.followup.send("✅ Ticket geschlossen.", ephemeral=True)
 
 
 # ===============================================================
@@ -980,13 +1073,18 @@ class ProjectSelectView(discord.ui.View):
 
 
 class TicketPanelView(discord.ui.View):
-    """Bestell-Panel: Produkt direkt auswählen, darunter die Vorschauen auf der Website."""
+    """Bestell-Panel: Produkt direkt auswählen, darunter die Vorschauen auf der Website und der Support-Knopf."""
     def __init__(self):
         super().__init__(timeout=None)
         self.add_item(ProjectSelect(persistent=True))
         for p in PRODUCTS:
             self.add_item(discord.ui.Button(label=f"Vorschau {p['name']}", emoji=p["emoji"], row=1,
                                             style=discord.ButtonStyle.link, url=product_url(p["key"])))
+
+    @discord.ui.button(label="Support / Frage", emoji="❔", style=discord.ButtonStyle.secondary,
+                       custom_id="volt:ticket:support", row=2)
+    async def support(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await open_support(interaction)
 
 
 class LegacyTicketButtonView(discord.ui.View):
@@ -1795,7 +1893,9 @@ def order_embed(guild: discord.Guild) -> discord.Embed:
             "Wähle unten dein Produkt aus und beschreib deine Wünsche. Dein Ticket sieht nur du und der Owner.\n\n"
             + "\n\n".join(lines) +
             "\n\n🌴 **Für Narco City kostenlos.** Spenden sind freiwillig und werden im Ticket geklärt.\n"
-            "🌐 **Andere Server** können wir leider nicht annehmen.")
+            "🌐 **Projekte für andere Server** können wir leider nicht annehmen.\n\n"
+            "❔ **Nur eine Frage?** Klick auf **Support / Frage**. Ohne Fragebogen, egal von welchem Server – "
+            "schreib einfach dein Anliegen rein.")
     return e
 
 
@@ -1856,7 +1956,9 @@ async def post_panels(guild: discord.Guild):
     kosten = find_channel(guild, "kosten")         # Kosten-Übersicht ist überflüssig: Kanal wird geleert
     if kosten:
         await purge_own(kosten)
-    await send_panel(guild, "faq", emb(f"{ic('faq', '❓')} Häufige Fragen", "Wähle unten eine Frage aus."), FaqView())
+    await send_panel(guild, "faq", emb(f"{ic('faq', '❓')} Häufige Fragen",
+                                       "Wähle unten eine Frage aus.\nDeine Frage ist nicht dabei? Öffne ein **Support-Ticket**, "
+                                       "ohne Fragebogen und egal von welchem Server."), FaqView())
     await send_panel(guild, "bestellen", order_embed(guild), TicketPanelView())
     # Nicht purgen: sonst würden die geposteten Bewertungen mitgelöscht
     await refresh_review_panel(guild)
@@ -5027,7 +5129,7 @@ async def setup_hook():
     await load_status_state()
     await refresh_bots_cache()
     for v in (VerifyView(), TicketPanelView(), LegacyTicketButtonView(), AdminPanelView(), OfferView(),
-              ReviewView(), FaqView()):
+              ReviewView(), FaqView(), SupportTicketView()):
         bot.add_view(v)
     if GUILD_ID:
         g = discord.Object(id=GUILD_ID)
