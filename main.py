@@ -57,7 +57,8 @@ MONITOR_INTERVAL = max(30, int(os.environ.get("MONITOR_INTERVAL", "60")))  # Sek
 # "VOLT System" = Zustand der Server-Plattform in der eigenen Region (Compute, Netzwerk, Speicher).
 VOLT_SYSTEM_URL = os.environ.get("VOLT_SYSTEM_URL", "https://api.railwaystatus.com/status")
 VOLT_SYSTEM_REGION = os.environ.get("VOLT_SYSTEM_REGION", "US West")
-VOLT_SYSTEM_PARTS = ("Compute", "Networking — Public", "Networking — Private", "Storage")
+# Teile, die laufende Bots betreffen (Builds, Dashboard usw. zählen nicht)
+VOLT_SYSTEM_PARTS = ("Running Workloads and Deployments", "Compute", "Networking - Public", "Networking - Private", "Storage")
 # Optional: Schlüssel für die Verwaltung per HTTP (Bots anlegen, Dienste überwachen). Leer = aus.
 ADMIN_API_KEY = os.environ.get("VOLT_ADMIN_KEY", "").strip()
 # Wird diese Nummer erhöht, postet der Bot nach dem nächsten Start einmal alle Panels neu (wie /panels).
@@ -2927,13 +2928,22 @@ async def check_volt_system(session: aiohttp.ClientSession):
             data = await r.json(content_type=None)
     except Exception:
         return
+    # Die Statusseite hat ihren Aufbau geändert: früher Gruppe = Region (darin Compute, Networking …),
+    # jetzt Gruppe = Teil (darin die Regionen). Beides wird erkannt, Bindestriche werden vereinheitlicht.
+    def norm(x) -> str:
+        return " ".join(str(x or "").replace("—", "-").replace("–", "-").lower().split())
+
+    parts = {norm(x) for x in VOLT_SYSTEM_PARTS}
+    region = norm(VOLT_SYSTEM_REGION)
     leaves = []
     for g in (data.get("components") or []) if isinstance(data, dict) else []:
-        if VOLT_SYSTEM_REGION.lower() in str(g.get("name", "")).lower():
-            for c in g.get("components") or []:
-                if str(c.get("name", "")).startswith(VOLT_SYSTEM_PARTS):
-                    leaves.append(str(c.get("status", "")))
+        gname = norm(g.get("name"))
+        for c in g.get("components") or []:
+            cname = norm(c.get("name"))
+            if (region in gname and cname in parts) or (gname in parts and region in cname):
+                leaves.append(str(c.get("status", "")))
     if not leaves:
+        print("VOLT System: keine passenden Einträge auf der Statusseite gefunden")
         return
     rank = max(_vsys_rank(x) for x in leaves)
     new = {0: "ok", 1: "wartung", 2: "eingeschraenkt"}.get(rank, "stoerung")
