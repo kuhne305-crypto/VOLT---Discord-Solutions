@@ -71,7 +71,16 @@
   "sync",
   "spende",
   "link",
-  "sprache"
+  "sprache",
+  "fahrzeug",
+  "waffe",
+  "blut",
+  "waage",
+  "telefon",
+  "auge",
+  "ausweis",
+  "gangwar",
+  "training"
  ],
  "icons": {
   "volt": {
@@ -361,6 +370,42 @@
   "sprache": {
    "group": "ui",
    "label": "Sprachen"
+  },
+  "fahrzeug": {
+   "group": "ui",
+   "label": "Fahrzeuge"
+  },
+  "waffe": {
+   "group": "ui",
+   "label": "Waffen"
+  },
+  "blut": {
+   "group": "ui",
+   "label": "Blood-in / Blut"
+  },
+  "waage": {
+   "group": "ui",
+   "label": "Sanktionen"
+  },
+  "telefon": {
+   "group": "ui",
+   "label": "Telefon"
+  },
+  "auge": {
+   "group": "ui",
+   "label": "Ansehen"
+  },
+  "ausweis": {
+   "group": "ui",
+   "label": "Ausweis / Profil"
+  },
+  "gangwar": {
+   "group": "ui",
+   "label": "Gangwar / Kampf"
+  },
+  "training": {
+   "group": "ui",
+   "label": "Training"
   }
  }
 }

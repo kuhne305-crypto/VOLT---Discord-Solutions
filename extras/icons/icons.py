@@ -321,6 +321,41 @@ icon("ui", "sprache", "Sprachen",
      ("m", '<path d="M2.5 4H13.5V14H8L4.5 17.5V14H2.5Z"/>'),
      ("a", '<path d="M15 9H21.5V18H19.5V21L16.5 18H11V16.5"/>'))
 
+# ---------- Familien-Systeme (Dashboards und Familien-Bots) ----------
+icon("ui", "fahrzeug", "Fahrzeuge",
+     ("m", '<path d="M2.5 16.5V11.5L5.5 6H15L18.5 11H21.5V16.5Z"/>'),
+     ("m", '<path d="M5.5 11H18.5"/>'),
+     ("af", '<circle cx="7" cy="17.5" r="2.3"/><circle cx="17" cy="17.5" r="2.3"/>'))
+icon("ui", "waffe", "Waffen",
+     ("m", '<circle cx="12" cy="12" r="7.5"/>'),
+     ("m", '<path d="M12 1.5V7.5M12 16.5V22.5M1.5 12H7.5M16.5 12H22.5"/>'),
+     ("af", '<path d="M10.6 10.6h2.8v2.8h-2.8z"/>'))
+icon("ui", "blut", "Blood-in / Blut",
+     ("m", '<path d="M12 2.5L18.3 12.2A6.7 6.7 0 1 1 5.7 12.2Z"/>'),
+     ("a", '<path d="M8.6 14.6A3.4 3.4 0 0 0 12 18"/>'))
+icon("ui", "waage", "Sanktionen",
+     ("m", '<path d="M12 3V20.5M7 20.5H17M4 6.5H20"/>'),
+     ("m", '<path d="M4 6.5L1.8 13M4 6.5L6.2 13M20 6.5L17.8 13M20 6.5L22.2 13"/>'),
+     ("a", '<path d="M1.5 13H6.5A2.5 2.5 0 0 1 1.5 13ZM17.5 13H22.5A2.5 2.5 0 0 1 17.5 13Z"/>'))
+icon("ui", "telefon", "Telefon",
+     ("m", '<path d="M4 3H8.5L10.5 8L8 9.8C9.3 12.4 11.6 14.7 14.2 16L16 13.5L21 15.5V20H18C10 19.6 4.4 14 4 6Z"/>'),
+     ("a", '<path d="M14 3.5A6.5 6.5 0 0 1 20.5 10"/>'))
+icon("ui", "auge", "Ansehen",
+     ("m", '<path d="M1.8 12C5 6.3 19 6.3 22.2 12C19 17.7 5 17.7 1.8 12Z"/>'),
+     ("af", '<circle cx="12" cy="12" r="3.1"/>'))
+icon("ui", "ausweis", "Ausweis / Profil",
+     ("m", '<path d="M2.5 5H18L21.5 8.5V19H2.5Z"/>'),
+     ("m", '<path d="M13 11H18.5M13 15H17"/>'),
+     ("a", '<circle cx="8" cy="10.8" r="2.1"/><path d="M4.8 16.6C5.3 14.9 6.5 14 8 14C9.5 14 10.7 14.9 11.2 16.6"/>'))
+
+icon("ui", "gangwar", "Gangwar / Kampf",
+     ("m", '<path d="M4 3.5L15.5 15M20 3.5L8.5 15"/>'),
+     ("m", '<path d="M3.5 20.5L7.5 16.5M20.5 20.5L16.5 16.5"/>'),
+     ("a", '<path d="M5.5 13.5L10.5 18.5M18.5 13.5L13.5 18.5"/>'))
+icon("ui", "training", "Training",
+     ("m", '<path d="M7.5 7V17M16.5 7V17M7.5 12H16.5"/>'),
+     ("af", '<path d="M2.5 9h3.5v6H2.5zM18 9h3.5v6H18z"/>'))
+
 # Welche Icons ein Discord-Server zuerst bekommt (Emoji-Plätze sind begrenzt)
 DISCORD_ORDER = (["volt"] + [k for k, v in ICONS.items() if v["group"] == "rang"]
                  + [k for k, v in ICONS.items() if v["group"] == "kanal"]
