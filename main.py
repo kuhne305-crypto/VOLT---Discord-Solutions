@@ -4850,10 +4850,10 @@ async def _before_stats():
 # keine Namen, keine Ticket-Inhalte.
 # ===============================================================
 WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
-WEB_PAGES = {"index", "volt-bot", "familien-dashboard", "fussball-manager", "routen-system", "datenschutz", "bot-bedingungen"}
-SITEMAP_PAGES = ("", "volt-bot", "familien-dashboard", "fussball-manager", "routen-system", "datenschutz", "bot-bedingungen")
+WEB_PAGES = {"index", "volt-bot", "familien-dashboard", "fussball-manager", "routen-system", "impressum", "datenschutz", "bot-bedingungen"}
+SITEMAP_PAGES = ("", "volt-bot", "familien-dashboard", "fussball-manager", "routen-system", "impressum", "datenschutz", "bot-bedingungen")
 # Saubere Adressen ohne .html. Alte Adressen leiten dauerhaft weiter, damit geteilte Links nicht ins Leere laufen.
-WEB_REDIRECTS = {"index": "/", "fraktion": "/familien-dashboard", "streamer": "/", "impressum": "/"}
+WEB_REDIRECTS = {"index": "/", "fraktion": "/familien-dashboard", "streamer": "/"}
 STATS_TTL = 60          # Sekunden, so oft wird die Datenbank höchstens gelesen
 COUNTS_TTL = 300        # Sekunden, so oft werden Mitglieder/Online von Discord geholt
 _site = {"t": 0.0, "data": None, "counts_t": 0.0, "members": None, "online": None}
