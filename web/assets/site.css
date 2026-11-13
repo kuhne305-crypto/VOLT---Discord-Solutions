@@ -769,3 +769,38 @@ section[id]{scroll-margin-top:84px}
 }
 .final-mig a{color:var(--muted);text-decoration:none} .final-mig a:hover{color:#fff}
 .legal nav{display:flex;flex-wrap:wrap;gap:.4rem 1.2rem}
+
+/* ---------- VOLT-Schnitt (gleich wie Dashboard und Routen Manager, Bausteine in volt-ui.css) ---------- */
+.load,.tiles,.dlink,.score,.spec,.why,.botbox,.sysrow,.drop,.rev-empty,.thumb,.peek-img,.dash{border-radius:0!important;
+  clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+.tiles::after,.dlink::after,.score::after,.spec::after,.why::after,.botbox::after,.sysrow::after,.drop::after,.rev-empty::after,.thumb::after{
+  content:"";position:absolute;top:0;right:0;width:14px;height:14px;pointer-events:none;z-index:3;
+  background:linear-gradient(225deg,transparent calc(50% - 1.2px),var(--line-2) calc(50% - 1.2px),var(--line-2) 50%,transparent 50%)}
+.tiles,.dlink,.score,.spec,.why,.botbox,.sysrow,.drop,.rev-empty{position:relative}
+.dlink:hover::after{background:linear-gradient(225deg,transparent calc(50% - 1.5px),var(--red) calc(50% - 1.5px),var(--red) 50%,transparent 50%)}
+.slot,.botlist li,.legend span,.mtag,.menu-btn,.nav > a,.nav-drop > button,.drop a{border-radius:3px!important}
+.slot{clip-path:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%)}
+/* Status-Marken statt bunter Emoji-Punkte: schräge Balken in den Statusfarben */
+.stc{display:inline-block;width:11px;height:11px;margin-right:.45rem;vertical-align:-1px;transform:skewX(-14deg);background:var(--muted);flex:none}
+.stc.open{background:var(--st-open)}.stc.work{background:var(--st-work)}.stc.live{background:var(--st-live)}.stc.maint{background:var(--st-maint)}
+/* Icons im Fließtext und in Listen */
+.vi.mi{width:22px;height:22px;margin:0 .55rem 0 0;vertical-align:-5px}
+.spec.sys b{display:flex;align-items:center;flex-wrap:wrap;gap:.1rem .2rem}
+.spec.sys b .vi.mi{margin-right:.45rem}
+.st .vi,.legend .vi,.sv-foot .vi,.meta .vi,.rev-meta .vi,.slot-txt .vi{width:15px;height:15px;margin-right:.4rem;vertical-align:-3px}
+.sv-foot span{display:inline-flex;align-items:center}
+.btn .vi{margin-right:.1rem}
+.dist .vi{width:14px;height:14px;vertical-align:-2px}
+td .vi.sm{width:16px;height:16px;vertical-align:-3px}
+/* Vorschaubilder lassen sich groß ansehen */
+[data-vu-zoom]{cursor:zoom-in}
+.ty{display:inline-flex;align-items:center;gap:.35rem;min-width:0}
+.ty .vi{width:15px;height:15px;flex:none}
+.slot-txt b .ty{display:inline-flex;vertical-align:-2px}
+.slot-txt small .vi,[data-toast] .vi{width:14px;height:14px;margin-right:.35rem;vertical-align:-2px}
+/* Modul-Raster ohne leere Felder am Ende */
+@media (min-width:861px){.spec.sys > div:last-child:nth-child(3n+1){grid-column:span 3}.spec.sys > div:last-child:nth-child(3n+2){grid-column:span 2}}
+@media (min-width:521px) and (max-width:860px){.spec.sys > div:last-child:nth-child(2n+1){grid-column:span 2}}
+/* Vorschau-Fenster ebenfalls mit VOLT-Schnitt */
+.sv,.dc,.demo{border-radius:0!important;clip-path:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
+.dc-e-title .vi,.dc-field b .vi,.dc-btn .vi{width:18px;height:18px;vertical-align:-4px;margin-right:2px}

@@ -61,7 +61,7 @@ VOLT_SYSTEM_PARTS = ("Compute", "Networking — Public", "Networking — Private
 # Optional: Schlüssel für die Verwaltung per HTTP (Bots anlegen, Dienste überwachen). Leer = aus.
 ADMIN_API_KEY = os.environ.get("VOLT_ADMIN_KEY", "").strip()
 # Wird diese Nummer erhöht, postet der Bot nach dem nächsten Start einmal alle Panels neu (wie /panels).
-PANELS_VERSION = "2026-11-13a"
+PANELS_VERSION = "2026-11-13b"
 
 MIN_ACCOUNT_AGE_DAYS = int(os.environ.get("MIN_ACCOUNT_AGE_DAYS", "3"))  # 0 = aus
 RAID_JOINS = int(os.environ.get("RAID_JOINS", "6"))      # so viele Joins ...
@@ -1576,6 +1576,7 @@ DESIGN_VERSION = "2026-11-12d"
 ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "assets", "icons")
 BANNER_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "assets", "img", "discord-banner.png")
 ICON_EMOJIS: dict[str, discord.Emoji] = {}   # Icon-Name (ohne „v_“) -> Server-Emoji
+APP_EMOJIS: dict[str, discord.Emoji] = {}    # Icon-Name -> App-Emoji (gehört dem Bot, belegt keine Server-Plätze)
 
 
 def icon_meta() -> dict:
@@ -1596,14 +1597,48 @@ def refresh_icon_map(guild: discord.Guild | None):
 
 
 def ic(key: str, fallback: str = "") -> str:
-    """Icon als Emoji-Text für Embeds. Fehlt es auf dem Server, kommt das normale Emoji."""
-    e = ICON_EMOJIS.get(key)
+    """Icon als Emoji-Text für Embeds: Server-Emoji, sonst App-Emoji, sonst das normale Emoji."""
+    e = ICON_EMOJIS.get(key) or APP_EMOJIS.get(key)
     return str(e) if e else fallback
 
 
 def ic_emoji(key: str, fallback: str):
     """Icon für Buttons und Auswahlmenüs."""
-    return ICON_EMOJIS.get(key) or fallback
+    return ICON_EMOJIS.get(key) or APP_EMOJIS.get(key) or fallback
+
+
+_app_emojis_synced = False
+
+
+async def sync_app_emojis():
+    """Alle Icons als App-Emojis hochladen (bis 2000 möglich) – so gibt es auch die Icons, für die auf dem
+    Server kein Emoji-Platz mehr frei ist. Einmal pro Start, im Hintergrund."""
+    global _app_emojis_synced
+    if _app_emojis_synced:
+        return
+    _app_emojis_synced = True
+    try:
+        existing = {e.name: e for e in await bot.fetch_application_emojis()}
+    except Exception as ex:
+        print("App-Emojis nicht lesbar:", repr(ex))
+        return
+    for name, e in existing.items():
+        if name.startswith("v_"):
+            APP_EMOJIS[name[2:]] = e
+    created = 0
+    for key in icon_meta().get("order", []):
+        if key in APP_EMOJIS:
+            continue
+        data = _icon_png(key)
+        if data is None:
+            continue
+        try:
+            APP_EMOJIS[key] = await bot.create_application_emoji(name=f"v_{key}", image=data)
+            created += 1
+        except discord.HTTPException as ex:
+            print(f"App-Emoji v_{key} nicht hochgeladen:", ex)
+        await asyncio.sleep(0.6)
+    print(f"VOLT-Icons als App-Emojis: {len(APP_EMOJIS)} bereit, {created} neu")
 
 
 def _icon_png(key: str) -> bytes | None:
@@ -1846,15 +1881,15 @@ def product_view(guild: discord.Guild, p: dict) -> discord.ui.View:
 async def honeypot_embed() -> discord.Embed:
     n = await pool.fetchval("SELECT value FROM stats WHERE key='honeypot_bans'") or 0
     e = discord.Embed(
-        title=f"{ic('stop', '🚨')} WICHTIGER HINWEIS",
+        title=f"{ic('autoban', ic('stop', '🚨'))} WICHTIGER HINWEIS",
         description=(
             "**Dieser Kanal dient lediglich dazu, gehackte Spam-Accounts automatisch zu bannen!**\n\n"
             "Das bedeutet:\n"
             "**Wer hier reinschreibt, wird ohne Möglichkeit auf Entbannung permanent von diesem Discord gebannt!**\n\n"
-            "🚫 **ALSO NICHT HIER REINSCHREIBEN!!!** 🚫\n\n"
+            f"{ic('stop', '🚫')} **ALSO NICHT HIER REINSCHREIBEN!!!** {ic('stop', '🚫')}\n\n"
             "Wer hier dennoch reinschreibt, ist selbst schuld."),
-        color=0xE74C3C)
-    e.add_field(name="📊 Statistik",
+        color=0xFF4D5E)
+    e.add_field(name=f"{ic('statistik', '📊')} Statistik",
                 value=f"Bereits **{n}** gehackte Discord-Nutzer wurden durch dieses System gebannt.",
                 inline=False)
     return e
@@ -5206,9 +5241,14 @@ async def on_ready():
             # weil Discord Umbenennungen und Emoji-Uploads bremst)
             asyncio.create_task(_design_in_background(g))
         elif g and await get_setting("panels_version") != PANELS_VERSION:
-            await set_setting("panels_version", PANELS_VERSION)
-            await post_panels(g)
-            print(f"Panels automatisch neu gepostet (Version {PANELS_VERSION}).")
+            async def _icons_then_panels():
+                await sync_app_emojis()          # erst die Icons, damit die neuen Panels sie schon zeigen
+                await set_setting("panels_version", PANELS_VERSION)
+                await post_panels(g)
+                print(f"Panels automatisch neu gepostet (Version {PANELS_VERSION}).")
+            asyncio.create_task(_icons_then_panels())
+        else:
+            asyncio.create_task(sync_app_emojis())
     except Exception as ex:
         print("Panels automatisch posten fehlgeschlagen:", repr(ex))
     if not GUILD_ID and not _cleaned_guild_commands:

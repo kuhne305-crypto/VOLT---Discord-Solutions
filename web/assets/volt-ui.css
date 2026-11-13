@@ -1,0 +1,122 @@
+/* VOLT UI – gemeinsame Bausteine für alle VOLT-Oberflächen
+   (Website voltstudio.work, VOLT-Bot-Dashboard, Routen Manager, Fussball-Manager …).
+   Diese Datei ist in jedem Projekt GLEICH. Wer etwas ändert, ändert es überall.
+
+   Formensprache:
+   - Knöpfe: alle Arten gleich geschnitten – unten rechts der VOLT-Schnitt, sonst eckig.
+   - Schalter: eckige Schiene, schräger Knopf (Parallelogramm), an = Amber.
+   - Panels / Dialoge: oben rechts der VOLT-Schnitt mit feiner Linie.
+   - Overlay: dunkel + leicht unscharf, Dialog mit Amber-Oberkante.
+   - Icons: eigenes VOLT-Icon-Set (Sprite volt-icons.svg), Linien Ivory, Akzent Amber.
+   Farben kommen aus den --vu-*-Variablen; jedes Projekt darf sie überschreiben (z. B. Server-Akzentfarbe). */
+
+:root{
+  --vu-acc:#ffb83f; --vu-acc-ink:#101112;
+  --vu-bg:#101112; --vu-panel:#17181a; --vu-panel2:#1f2023;
+  --vu-line:#2b2c2f; --vu-line2:#3a3b3f;
+  --vu-text:#f2efe8; --vu-soft:#dcd7cc; --vu-muted:#b8b2a6; --vu-bad:#ff4d5e;
+  --vu-cut:14px;       /* Panels */
+  --vu-cut-btn:9px;    /* Knöpfe */
+}
+
+/* ---------- Knöpfe ----------
+   Website: .btn-red (Haupt), .btn-line (Rand), .btn-sm
+   Dashboard: .btn (Haupt), .btn.ghost (Rand), .btn.danger, .btn.sm, .btn.big
+   Demos/Werkzeuge: .dm-btn, .vu-btn (+ .primary / .ghost / .danger)                         */
+.btn,.dm-btn,.vu-btn{position:relative;border-radius:0!important;padding-right:calc(var(--vu-pad-r,1.4em) + 4px);
+  clip-path:polygon(0 0,100% 0,100% calc(100% - var(--vu-cut-btn)),calc(100% - var(--vu-cut-btn)) 100%,0 100%);
+  --vu-btn-line:transparent;transition:background .15s,border-color .15s,color .15s,filter .15s,transform .1s}
+.btn::after,.dm-btn::after,.vu-btn::after{content:"";position:absolute;right:0;bottom:0;width:var(--vu-cut-btn);height:var(--vu-cut-btn);
+  pointer-events:none;background:linear-gradient(135deg,transparent calc(50% - 1.2px),var(--vu-btn-line) calc(50% - 1.2px),var(--vu-btn-line) 50%,transparent 50%)}
+.btn:active,.dm-btn:active,.vu-btn:active{transform:translateY(1px)}
+.btn.sm,.btn-sm,.dm-btn.sm,.vu-btn.sm{--vu-cut-btn:7px;--vu-pad-r:.95em}
+.btn.big,.vu-btn.big{--vu-cut-btn:11px}
+
+/* Grundform für neue Knöpfe (Dialoge, Werkzeuge) */
+.vu-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;font:600 15px/1 "Barlow",system-ui,sans-serif;
+  padding:12px 18px;background:transparent;color:var(--vu-text);border:1px solid var(--vu-line2);text-decoration:none;white-space:nowrap}
+.vu-btn.danger{color:var(--vu-bad);border-color:rgba(255,77,94,.6)}
+.vu-btn.danger:hover{background:var(--vu-bad);color:#fff;border-color:var(--vu-bad)}
+.vu-btn .vi,.btn .vi,.dm-btn .vi{width:18px;height:18px}
+.btn-red .vi,.vu-btn.primary .vi{color:var(--vu-acc-ink);--vi-accent:var(--vu-acc-ink)}
+
+/* Hauptknopf: Amber gefüllt (kein Glow – der würde vom Schnitt abgeschnitten) */
+.btn-red,.vu-btn.primary,.dm-btn.primary{background:var(--vu-acc)!important;color:var(--vu-acc-ink)!important;border-color:var(--vu-acc)!important;
+  box-shadow:none!important;--vu-btn-line:transparent}
+.btn-red:hover,.vu-btn.primary:hover,.dm-btn.primary:hover{filter:brightness(1.1)}
+
+/* Randknopf */
+.btn-line,.btn.ghost,.vu-btn,.vu-btn.ghost,.dm-btn{--vu-btn-line:var(--vu-line2)}
+.btn-line:hover,.btn.ghost:hover,.vu-btn:not(.primary):not(.danger):hover,.dm-btn:not(.primary):hover{
+  border-color:var(--vu-acc)!important;--vu-btn-line:var(--vu-acc);filter:none}
+
+/* Gefahr */
+.btn.danger,.vu-btn.danger{--vu-btn-line:rgba(255,77,94,.6)}
+.btn.danger:hover,.vu-btn.danger:hover{--vu-btn-line:var(--vu-bad)}
+
+/* ---------- Schalter ----------
+   Dashboard: <label class="switch"><input type="checkbox"><span></span></label>
+   Routen Manager: <label class="toggle"><input type="checkbox"><span class="sw"></span>…</label>  */
+.switch span,.toggle .sw,.vu-switch span{border-radius:2px!important;background:var(--vu-panel2)!important;border:1px solid var(--vu-line2)!important;box-shadow:none!important}
+.switch span::after,.toggle .sw::after,.vu-switch span::after{border-radius:0!important;top:3px!important;left:3px!important;width:16px!important;height:16px!important;
+  background:var(--vu-muted)!important;transform:skewX(-12deg)!important}
+.switch input:checked+span,.toggle input:checked+.sw,.vu-switch input:checked+span{background:color-mix(in srgb,var(--vu-acc) 20%,transparent)!important;
+  border-color:color-mix(in srgb,var(--vu-acc) 55%,transparent)!important}
+.switch input:checked+span::after,.vu-switch input:checked+span::after{transform:translateX(20px) skewX(-12deg)!important;background:var(--vu-acc)!important}
+.toggle input:checked+.sw::after{transform:translateX(18px) skewX(-12deg)!important;background:var(--vu-acc)!important}
+.switch.big span::after{width:22px!important;height:22px!important}
+.switch.big input:checked+span::after{transform:translateX(26px) skewX(-12deg)!important}
+.switch input:focus-visible+span,.toggle input:focus-visible+.sw,.vu-switch input:focus-visible+span{outline:2px solid var(--vu-acc);outline-offset:2px}
+.vu-switch{position:relative;display:inline-block;width:44px;height:24px;flex:none}
+.vu-switch input{position:absolute;opacity:0;width:0;height:0}
+.vu-switch span{position:absolute;inset:0;cursor:pointer;transition:.18s}
+.vu-switch span::after{content:"";position:absolute;transition:.18s}
+
+/* ---------- Panels mit VOLT-Schnitt ---------- */
+.vu-cut{position:relative;border-radius:0!important;clip-path:polygon(0 0,calc(100% - var(--vu-cut)) 0,100% var(--vu-cut),100% 100%,0 100%)}
+.vu-cut::after{content:"";position:absolute;top:0;right:0;width:var(--vu-cut);height:var(--vu-cut);pointer-events:none;z-index:2;
+  background:linear-gradient(225deg,transparent calc(50% - 1.2px),var(--vu-cut-line,var(--vu-line2)) calc(50% - 1.2px),var(--vu-cut-line,var(--vu-line2)) 50%,transparent 50%)}
+.vu-cut.hot{--vu-cut-line:var(--vu-acc)}
+
+/* ---------- Overlay + Dialog ----------
+   <div class="overlay"><div class="modal" role="dialog" aria-modal="true">
+     <div class="modal-head"><svg class="vi">…</svg><h3>Titel</h3><button class="modal-x">×</button></div>
+     <div class="modal-body">…</div><div class="modal-foot">Knöpfe</div></div></div>                */
+.overlay{position:fixed;inset:0;z-index:1000;background:rgba(2,3,5,.78);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+  display:flex;align-items:flex-start;justify-content:center;padding:10vh 16px 16px;overflow-y:auto;animation:vu-fade .15s}
+.modal{position:relative;width:100%;max-width:560px;background:var(--vu-panel);color:var(--vu-text);border:1px solid var(--vu-line2);
+  border-top:2px solid var(--vu-acc);box-shadow:0 30px 80px rgba(0,0,0,.6);animation:vu-pop .18s;
+  clip-path:polygon(0 0,calc(100% - var(--vu-cut)) 0,100% var(--vu-cut),100% 100%,0 100%)}
+.modal::after{content:"";position:absolute;top:0;right:0;width:var(--vu-cut);height:var(--vu-cut);pointer-events:none;
+  background:linear-gradient(225deg,transparent calc(50% - 1.5px),var(--vu-acc) calc(50% - 1.5px),var(--vu-acc) 50%,transparent 50%)}
+.modal.wide{max-width:860px}
+.modal.media{max-width:min(1200px,96vw);background:#0b0c0d}
+.modal-head{display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid var(--vu-line)}
+.modal-head .vi{width:24px;height:24px}
+.modal-head h3{margin:0;font-family:"Saira","Arial Black",sans-serif;font-style:italic;font-weight:850;font-stretch:112%;
+  text-transform:uppercase;font-size:20px;line-height:1.1;letter-spacing:0}
+.modal-x{margin-left:auto;width:34px;height:34px;display:grid;place-items:center;background:none;border:1px solid var(--vu-line2);
+  color:var(--vu-muted);cursor:pointer;flex:none;padding:0}
+.modal-x:hover{color:var(--vu-text);border-color:var(--vu-acc)}
+.modal-x svg{width:16px;height:16px}
+.modal-body{padding:20px 22px;color:var(--vu-soft);line-height:1.6}
+.modal-body p{margin:0 0 .8em}.modal-body p:last-child{margin:0}
+.modal-media{display:grid;place-items:center;background:#0b0c0d}
+.modal-media img{display:block;max-width:100%;max-height:calc(100vh - 150px);width:auto;height:auto;user-select:none;-webkit-user-select:none;-webkit-user-drag:none}
+.overlay:has(.modal.media){padding-top:4vh}
+.modal.media{width:auto}
+.modal-foot{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:0 22px 20px}
+.vu-lock{overflow:hidden}
+@keyframes vu-fade{from{opacity:0}to{opacity:1}}
+@keyframes vu-pop{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.overlay,.modal{animation:none}}
+@media (max-width:600px){.overlay{padding:16px 10px;align-items:flex-end}.modal-foot{flex-direction:column-reverse}.modal-foot>*{width:100%;justify-content:center}}
+
+/* ---------- Icons ----------
+   <svg class="vi"><use href="/…/volt-icons.svg#vi-regeln"/></svg>  (Linien in Textfarbe, Akzent per --vi-accent) */
+.vi{width:20px;height:20px;flex:none;display:inline-block;vertical-align:middle;color:var(--vu-text);--vi-accent:var(--vu-acc)}
+.vi.sm{width:16px;height:16px}.vi.lg{width:28px;height:28px}.vi.xl{width:40px;height:40px}
+.vi.dim{color:var(--vu-muted)}
+.vu-ico{display:inline-grid;place-items:center;width:40px;height:40px;flex:none;background:var(--vu-bg);border:1px solid var(--vu-line2);
+  clip-path:polygon(0 0,calc(100% - 9px) 0,100% 9px,100% 100%,0 100%)}
+.vu-ico .vi{width:22px;height:22px}

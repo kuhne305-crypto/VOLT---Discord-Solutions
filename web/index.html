@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-vu-icons="/assets/icons/volt-icons.svg?v=9d6b9828">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -19,8 +19,10 @@
 <link rel="canonical" href="https://voltstudio.work/">
 <link rel="icon" href="/assets/img/favicon.svg?v=4" type="image/svg+xml">
 <link rel="preload" href="/assets/fonts/saira-italic.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/site.css?v=6e001410">
-<script src="/assets/site.js?v=9ef0fb7f" defer></script>
+<link rel="stylesheet" href="/assets/site.css?v=69872a92">
+<link rel="stylesheet" href="/assets/volt-ui.css?v=af40e0c7">
+<script src="/assets/volt-ui.js?v=6e1e6668" defer></script>
+<script src="/assets/site.js?v=cd9bc8bd" defer></script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="vmark" viewBox="0 0 100 100"><path fill="#f2efe8" d="M95.68 48.63L88.42 57.22L84.84 68.43L66.45 85.89L43.14 85.59L39.3 84.51L31.98 90.75L39.14 92.87L68.3 92.64L70.03 91.9L89.21 73.88L94.75 61.29L95.7 55.86ZM4.3 48.16L4.67 58.75L7.49 67.96L12.62 76.3L21.28 85.08L25.35 78.62L15.11 67.64L11.6 57.47ZM34.29 24.02L15.04 40.95L14.65 56.64L21.42 66.07L21.54 39.15ZM80.22 16L76.11 21.99L84.15 30.19L86.85 42.16L77.54 51.93L77.49 69.7L83.69 58.38L95.17 44.42L91.29 27.18L88.54 23.67ZM66.87 10.57L60.12 9.07L40.64 8.61L27.52 14.27L17.58 20.28L21.77 21.82L6.1 37.3L4.78 43.5L10.42 50.75L11.23 40.35L34.82 16.74L43.6 15.05L53.77 15.12L60.4 16.32Z"/><path fill="#ffb83f" d="M84.89 2L24.82 54.52L46.88 54.01L33.13 74.69L16.31 98L80.57 42.55L56.28 43.24Z"/></symbol></svg>
@@ -67,7 +69,7 @@
         <ul class="hero-chips">
           <li class="sys-chip" data-sys-chip><i aria-hidden="true"></i><span data-sys-label>Status wird geladen</span></li>
           <li><i class="dot-live" aria-hidden="true"></i><span data-s="online">–</span>&nbsp;online · <span data-s="members">–</span> Mitglieder</li>
-          <li>★ <span data-s="rating-avg">–</span> · <span data-s="rating-label">–</span></li>
+          <li><svg class="vi sm" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-bewertung"/></svg> <span data-s="rating-avg">–</span> · <span data-s="rating-label">–</span></li>
           <li class="mig-li"><span class="mig"><i class="flag" aria-hidden="true"></i>Made in Germany</span></li>
         </ul>
       </div>
@@ -143,7 +145,7 @@
       </header>
       <div class="dash-links three">
         <a class="dlink" href="/familien-dashboard">
-          <div class="thumb"><div class="thumb-img"><img src="/assets/img/peek/slide-02-900.webp?v=4" width="900" height="506" alt="Familien-Dashboard Übersicht (Sneak Peek mit Beispieldaten)" loading="lazy" draggable="false"></div></div>
+          <div class="thumb"><div class="thumb-img" data-vu-zoom><img src="/assets/img/peek/slide-02-900.webp?v=4" width="900" height="506" alt="Familien-Dashboard Übersicht (Sneak Peek mit Beispieldaten)" loading="lazy" draggable="false"></div></div>
           <div class="dlink-body"><span class="chip-state hot">All-in-One · Demo</span><h3>Familien-Dashboard</h3><p>Mitglieder, Termine, Kasse, Lager und Sanktionen in einem Dashboard. 14 Systeme, ein Bot, mit klickbarer Demo.</p><span class="more">Vorschau &amp; Demo<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M5 12h13M13 6l6 6-6 6"/></svg></span></div>
         </a>
         <a class="dlink" href="/fussball-manager">
@@ -169,7 +171,7 @@
         <div class="callout">
           <p><b>Zur Wartezeit:</b> Je mehr Aufträge reinkommen, desto voller wird die Werkbank. Je nachdem, wie groß eine Bestellung ist, kann sich eine später aufgegebene Bestellung nach hinten verschieben.</p>
           <p>Den Stand deines Projekts siehst du jederzeit am Symbol deines Ticket-Kanals. Antwortet jemand aus dem Team, bekommst du eine DM mit Link zum Ticket.</p>
-          <div class="legend"><span>🟡 Offen</span><span>🔵 In Bearbeitung</span><span>🟢 Läuft</span><span>🟠 Wartung</span><span>⏳ Pausiert</span><span>📦 Archiv</span></div>
+          <div class="legend"><span><i class="stc open"></i>Offen</span><span><i class="stc work"></i>In Bearbeitung</span><span><i class="stc live"></i>Läuft</span><span><i class="stc maint"></i>Wartung</span><span><svg class="vi sm" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-uhr"/></svg>Pausiert</span><span><svg class="vi sm" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-archiv"/></svg>Archiv</span></div>
         </div>
       </div>
       <dl class="facts">
@@ -195,7 +197,7 @@
           <div class="score-top"><span class="score-num"><span data-s="rating-avg">–</span><small>/5</small></span><span class="stars" data-s="rating-stars" role="img" aria-label="Durchschnittliche Sternebewertung"></span></div>
           <p class="score-label" data-s="rating-label">–</p>
           <p class="score-count" data-s="rating-count">–</p>
-          <div class="dist"><div data-dist="5"><span>5 ★</span><span class="bar"><i></i></span><span>0</span></div><div data-dist="4"><span>4 ★</span><span class="bar"><i></i></span><span>0</span></div><div data-dist="3"><span>3 ★</span><span class="bar"><i></i></span><span>0</span></div><div data-dist="2"><span>2 ★</span><span class="bar"><i></i></span><span>0</span></div><div data-dist="1"><span>1 ★</span><span class="bar"><i></i></span><span>0</span></div></div>
+          <div class="dist"><div data-dist="5"><span>5 <svg class="vi sm" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-bewertung"/></svg></span><span class="bar"><i></i></span><span>0</span></div><div data-dist="4"><span>4 <svg class="vi sm" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-bewertung"/></svg></span><span class="bar"><i></i></span><span>0</span></div><div data-dist="3"><span>3 <svg class="vi sm" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-bewertung"/></svg></span><span class="bar"><i></i></span><span>0</span></div><div data-dist="2"><span>2 <svg class="vi sm" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-bewertung"/></svg></span><span class="bar"><i></i></span><span>0</span></div><div data-dist="1"><span>1 <svg class="vi sm" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-bewertung"/></svg></span><span class="bar"><i></i></span><span>0</span></div></div>
         </div>
         <div class="rev-list" id="revList"></div>
       </div>
@@ -210,11 +212,11 @@
         <p>Jede Anfrage läuft über ein Ticket auf dem VOLT-Discord. Der Bot zeigt dir in jedem Schritt, wo dein Projekt steht.</p>
       </header>
       <ol class="steps">
-        <li class="step"><span class="step-n">1</span><h3>Produkt wählen</h3><p>In #bestellen dein Produkt auswählen, Vorschau ansehen und deine Wünsche beschreiben.</p><span class="st">🟡 Offen</span></li>
-        <li class="step"><span class="step-n">2</span><h3>Bestätigung</h3><p>Ich prüfe deine Anfrage und schicke dir eine Bestätigung. Kostet nichts.</p><span class="st">💼 Bestätigung</span></li>
-        <li class="step"><span class="step-n">3</span><h3>Bauen</h3><p>Sobald ich an deinem Projekt arbeite, liegt es auf der Werkbank und die Uhr läuft, live auf dieser Seite.</p><span class="st">🔵 In Bearbeitung</span></li>
-        <li class="step"><span class="step-n">4</span><h3>Nichts verpassen</h3><p>Antwortet jemand aus dem Team im Ticket, schickt dir der Bot eine DM mit Link.</p><span class="st">📬 DM-Benachrichtigung</span></li>
-        <li class="step"><span class="step-n">5</span><h3>Live &amp; bewerten</h3><p>Dein System läuft. Du bekommst direkt eine Nachricht und kannst mit 1 bis 5 Sternen bewerten.</p><span class="st">🟢 Läuft · ⭐ Bewertung</span></li>
+        <li class="step"><span class="step-n">1</span><h3>Produkt wählen</h3><p>In #bestellen dein Produkt auswählen, Vorschau ansehen und deine Wünsche beschreiben.</p><span class="st"><i class="stc open"></i>Offen</span></li>
+        <li class="step"><span class="step-n">2</span><h3>Bestätigung</h3><p>Ich prüfe deine Anfrage und schicke dir eine Bestätigung. Kostet nichts.</p><span class="st"><svg class="vi sm" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-kunde"/></svg>Bestätigung</span></li>
+        <li class="step"><span class="step-n">3</span><h3>Bauen</h3><p>Sobald ich an deinem Projekt arbeite, liegt es auf der Werkbank und die Uhr läuft, live auf dieser Seite.</p><span class="st"><i class="stc work"></i>In Bearbeitung</span></li>
+        <li class="step"><span class="step-n">4</span><h3>Nichts verpassen</h3><p>Antwortet jemand aus dem Team im Ticket, schickt dir der Bot eine DM mit Link.</p><span class="st"><svg class="vi sm" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-chat"/></svg>DM-Benachrichtigung</span></li>
+        <li class="step"><span class="step-n">5</span><h3>Live &amp; bewerten</h3><p>Dein System läuft. Du bekommst direkt eine Nachricht und kannst mit 1 bis 5 Sternen bewerten.</p><span class="st"><i class="stc live"></i>Läuft · <svg class="vi sm" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-bewertung"/></svg>Bewertung</span></li>
       </ol>
     </div>
   </section>
@@ -234,7 +236,7 @@
       </div>
       <div class="why-cta">
         <a class="btn btn-red" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/></svg>Discord beitreten</a>
-        <a class="btn btn-line" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite>💛 Spenden über Discord</a>
+        <a class="btn btn-line" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg class="vi" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-spende"/></svg>Spenden über Discord</a>
       </div>
     </div>
   </section>
@@ -263,7 +265,7 @@
       <p>Komm auf den VOLT-Discord, wähl in #bestellen dein Produkt und beschreib deine Wünsche. Alles kostenlos, Spenden klären wir auf Discord.</p>
       <div class="cta-row">
         <a class="btn btn-red" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5h16v10.5H9.5L5 20v-4H4z"/></svg>Discord beitreten</a>
-        <a class="btn btn-line" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite>💛 Spenden über Discord</a>
+        <a class="btn btn-line" href="https://discord.gg/RpUtNGT6uj" target="_blank" rel="noopener" data-invite><svg class="vi" aria-hidden="true"><use href="/assets/icons/volt-icons.svg?v=9d6b9828#vi-spende"/></svg>Spenden über Discord</a>
       </div>
       <p class="final-mig"><span class="mig"><i class="flag" aria-hidden="true"></i>Made in Germany</span><span>Support auf Deutsch</span><span>Alles kostenlos</span></p>
     </div><div class="final-emblem" aria-hidden="true"><svg class="emblem" viewBox="0 0 200 200">

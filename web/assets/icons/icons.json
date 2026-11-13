@@ -49,7 +49,29 @@
   "embeds",
   "befehle",
   "erinnerungen",
-  "statkanaele"
+  "statkanaele",
+  "autoban",
+  "plus",
+  "check",
+  "kreuz",
+  "warnung",
+  "uhr",
+  "kalender",
+  "kasse",
+  "stift",
+  "loeschen",
+  "export",
+  "import",
+  "suche",
+  "schluessel",
+  "handy",
+  "pokal",
+  "kamera",
+  "live",
+  "sync",
+  "spende",
+  "link",
+  "sprache"
  ],
  "icons": {
   "volt": {
@@ -251,6 +273,94 @@
   "statkanaele": {
    "group": "modul",
    "label": "Statistik-Kanäle"
+  },
+  "autoban": {
+   "group": "modul",
+   "label": "Autoban-Falle"
+  },
+  "plus": {
+   "group": "ui",
+   "label": "Hinzufügen"
+  },
+  "check": {
+   "group": "ui",
+   "label": "Erledigt"
+  },
+  "kreuz": {
+   "group": "ui",
+   "label": "Fehler / Abgelehnt"
+  },
+  "warnung": {
+   "group": "ui",
+   "label": "Achtung"
+  },
+  "uhr": {
+   "group": "ui",
+   "label": "Zeit"
+  },
+  "kalender": {
+   "group": "ui",
+   "label": "Termine"
+  },
+  "kasse": {
+   "group": "ui",
+   "label": "Kasse / Geld"
+  },
+  "stift": {
+   "group": "ui",
+   "label": "Bearbeiten"
+  },
+  "loeschen": {
+   "group": "ui",
+   "label": "Löschen"
+  },
+  "export": {
+   "group": "ui",
+   "label": "Senden / Export"
+  },
+  "import": {
+   "group": "ui",
+   "label": "Empfangen / Import"
+  },
+  "suche": {
+   "group": "ui",
+   "label": "Suche"
+  },
+  "schluessel": {
+   "group": "ui",
+   "label": "Zugang"
+  },
+  "handy": {
+   "group": "ui",
+   "label": "Handy"
+  },
+  "pokal": {
+   "group": "ui",
+   "label": "Pokal"
+  },
+  "kamera": {
+   "group": "ui",
+   "label": "Foto"
+  },
+  "live": {
+   "group": "ui",
+   "label": "Live / Online"
+  },
+  "sync": {
+   "group": "ui",
+   "label": "Aktualisieren"
+  },
+  "spende": {
+   "group": "ui",
+   "label": "Spenden"
+  },
+  "link": {
+   "group": "ui",
+   "label": "Öffnen"
+  },
+  "sprache": {
+   "group": "ui",
+   "label": "Sprachen"
   }
  }
 }

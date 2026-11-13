@@ -243,11 +243,90 @@ icon("modul", "statkanaele", "Statistik-Kanäle",
      ("m", '<path d="M9.5 3L7 21M16.5 3L14 21M4 8.5H19M3 15.5H18"/>'),
      ("af", '<circle cx="20.2" cy="4.2" r="2.2"/>'))
 
+icon("modul", "autoban", "Autoban-Falle",
+     ("m", '<path d="M8 2.5H16L21.5 8V16L16 21.5H8L2.5 16V8Z"/>'),
+     ("af", '<path d="M13.6 5.4L7.6 13.4H11.3L10.1 18.6L16.5 10.4H12.7Z"/>'))
+
+# ---------- Allgemeine Symbole (Knöpfe, Status, Listen) ----------
+HEART = ("M12 20.5C5 15.5 2.5 12.2 2.5 8.7C2.5 6 4.6 3.8 7.2 3.8C9.2 3.8 11 5 12 6.8"
+         "C13 5 14.8 3.8 16.8 3.8C19.4 3.8 21.5 6 21.5 8.7C21.5 12.2 19 15.5 12 20.5Z")
+icon("ui", "plus", "Hinzufügen",
+     ("m", '<path d="M12 3.5V20.5"/>'),
+     ("a", '<path d="M3.5 12H20.5"/>'))
+icon("ui", "check", "Erledigt",
+     ("m", f'<path d="{CUTBOX}"/>'),
+     ("a", '<path d="M7 12.5L10.5 16L17 8.5" stroke-width="2.4"/>'))
+icon("ui", "kreuz", "Fehler / Abgelehnt",
+     ("m", f'<path d="{CUTBOX}"/>'),
+     ("d", '<path d="M8 8.5L16 16.5M16 8.5L8 16.5" stroke-width="2.4"/>'))
+icon("ui", "warnung", "Achtung",
+     ("m", '<path d="M12 3L22 20.5H2Z"/>'),
+     ("a", '<path d="M12 9V14"/>'),
+     ("af", '<path d="M11 16.2h2v2h-2z"/>'))
+icon("ui", "uhr", "Zeit",
+     ("m", '<circle cx="12" cy="12" r="9"/>'),
+     ("a", '<path d="M12 6.5V12L15.8 14.6"/>'))
+icon("ui", "kalender", "Termine",
+     ("m", '<path d="M3 5H21V21H3Z"/>'),
+     ("m", '<path d="M3 10H21M8 2.5V7M16 2.5V7"/>'),
+     ("af", '<path d="M13.5 13.5h4v4h-4z"/>'))
+icon("ui", "kasse", "Kasse / Geld",
+     ("m", '<path d="M2.5 6H18L21.5 9.5V18H2.5Z"/>'),
+     ("a", '<circle cx="12" cy="12" r="3"/>'),
+     ("m", '<path d="M6 9.5V14.5"/>'))
+icon("ui", "stift", "Bearbeiten",
+     ("m", '<path d="M4 20L4.8 15.8L15.4 5.2L18.8 8.6L8.2 19.2Z"/>'),
+     ("m", '<path d="M13.2 7.4L16.6 10.8"/>'),
+     ("a", '<path d="M13 21H21"/>'))
+icon("ui", "loeschen", "Löschen",
+     ("m", '<path d="M5.5 7H18.5L17.3 21H6.7Z"/>'),
+     ("m", '<path d="M3 7H21M9 7V3.5H15V7"/>'),
+     ("a", '<path d="M10 11V17M14 11V17"/>'))
+icon("ui", "export", "Senden / Export",
+     ("m", '<path d="M4 13.5V20.5H20V13.5"/>'),
+     ("a", '<path d="M12 15.5V3.5M7.5 8L12 3.5L16.5 8"/>'))
+icon("ui", "import", "Empfangen / Import",
+     ("m", '<path d="M4 13.5V20.5H20V13.5"/>'),
+     ("a", '<path d="M12 3.5V15.5M7.5 11L12 15.5L16.5 11"/>'))
+icon("ui", "suche", "Suche",
+     ("m", '<circle cx="10.5" cy="10.5" r="6.5"/>'),
+     ("a", '<path d="M15.3 15.3L21 21" stroke-width="2.6"/>'))
+icon("ui", "schluessel", "Zugang",
+     ("m", '<circle cx="8" cy="15.5" r="4.5"/>'),
+     ("a", '<path d="M11.2 12.3L20 3.5M16.6 6.9L19.2 9.5M14 9.5L16.2 11.7"/>'))
+icon("ui", "handy", "Handy",
+     ("m", '<path d="M6.5 2.5H17.5V21.5H6.5Z"/>'),
+     ("a", '<path d="M10.5 18.3H13.5"/>'))
+icon("ui", "pokal", "Pokal",
+     ("m", '<path d="M7 3.5H17V9.5A5 5 0 0 1 7 9.5Z"/>'),
+     ("m", '<path d="M7 5.5H3.5V7.5A3.5 3.5 0 0 0 7.3 11M17 5.5H20.5V7.5A3.5 3.5 0 0 1 16.7 11M12 14.5V18"/>'),
+     ("a", '<path d="M7.5 20.5H16.5"/>'))
+icon("ui", "kamera", "Foto",
+     ("m", '<path d="M2.5 7H7.5L9.5 4.5H14.5L16.5 7H21.5V19.5H2.5Z"/>'),
+     ("a", '<circle cx="12" cy="13" r="3.5"/>'))
+icon("ui", "live", "Live / Online",
+     ("af", '<circle cx="12" cy="12" r="2.8"/>'),
+     ("m", '<path d="M7.6 7.6A6.2 6.2 0 0 0 7.6 16.4M16.4 7.6A6.2 6.2 0 0 1 16.4 16.4'
+            'M4.4 4.4A10.7 10.7 0 0 0 4.4 19.6M19.6 4.4A10.7 10.7 0 0 1 19.6 19.6"/>'))
+icon("ui", "sync", "Aktualisieren",
+     ("m", '<path d="M19.6 9.5A8 8 0 0 0 5.2 7.2M4.4 14.5A8 8 0 0 0 18.8 16.8"/>'),
+     ("a", '<path d="M5 3V7.5H9.5M19 21V16.5H14.5"/>'))
+icon("ui", "spende", "Spenden",
+     ("m", f'<path d="{HEART}"/>'),
+     ("af", '<path d="M13.2 7.6L9 12.8H11.9L10.8 16.8L15.2 11.3H12.3Z"/>'))
+icon("ui", "link", "Öffnen",
+     ("m", '<path d="M12 4H4V20H20V12"/>'),
+     ("a", '<path d="M14.5 3.5H20.5V9.5M20.5 3.5L11 13"/>'))
+icon("ui", "sprache", "Sprachen",
+     ("m", '<path d="M2.5 4H13.5V14H8L4.5 17.5V14H2.5Z"/>'),
+     ("a", '<path d="M15 9H21.5V18H19.5V21L16.5 18H11V16.5"/>'))
+
 # Welche Icons ein Discord-Server zuerst bekommt (Emoji-Plätze sind begrenzt)
 DISCORD_ORDER = (["volt"] + [k for k, v in ICONS.items() if v["group"] == "rang"]
                  + [k for k, v in ICONS.items() if v["group"] == "kanal"]
                  + [k for k, v in ICONS.items() if v["group"] == "produkt"]
-                 + [k for k, v in ICONS.items() if v["group"] == "modul"])
+                 + [k for k, v in ICONS.items() if v["group"] == "modul"]
+                 + [k for k, v in ICONS.items() if v["group"] == "ui"])
 
 COLORS = {"main": "#F2EFE8", "accent": "#FFB83F", "danger": "#FF4D5E"}
 

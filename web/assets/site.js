@@ -47,7 +47,7 @@
     var t = $("[data-toast]", box);
     if (!t) return;
     t.textContent = "";
-    var span = document.createElement("span"); span.textContent = text; t.appendChild(span);
+    var span = document.createElement("span"); span.innerHTML = ICO("schloss"); span.appendChild(document.createTextNode(text)); t.appendChild(span);
     var a = document.createElement("a");
     a.href = INVITE_URL; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Discord beitreten";
     a.setAttribute("data-invite", "");
@@ -61,7 +61,7 @@
       var lock = e.target.closest && e.target.closest("[data-lock]");
       if (!lock || !box.contains(lock)) return;
       e.preventDefault();
-      toast(box, "🔒 In der Vorschau gesperrt. Im echten Discord funktioniert alles.");
+      toast(box, "In der Vorschau gesperrt. Im echten Discord funktioniert alles.");
     });
   });
 
@@ -138,11 +138,20 @@
   function tick() {
     timers.forEach(function (t) {
       var sec = t.base + (t.running ? (Date.now() - t.t0) / 1000 : 0);
-      t.el.textContent = (t.running ? "⏱ " : "⏸ ") + clock(sec) + (t.running ? " · Uhr läuft" : " · pausiert");
+      t.el.innerHTML = ICO("uhr") + clock(sec) + (t.running ? " · Uhr läuft" : " · pausiert");
     });
   }
   setInterval(tick, 1000);
 
+  var ICO = function (name) { return (window.VOLT && VOLT.icon) ? VOLT.icon(name, "sm") : ""; };
+  // Projektart mit passendem VOLT-Icon (Emoji am Anfang fällt weg)
+  function typeEl(label) {
+    var txt = String(label || "Projekt").replace(/^[^\wÄÖÜäöü]+\s*/, "");
+    var k = /famil/i.test(txt) ? "familie" : /fu(ss|ß)ball/i.test(txt) ? "fussball" : /route/i.test(txt) ? "routen"
+          : /support/i.test(txt) ? "support" : /bot/i.test(txt) ? "bot" : "volt";
+    var span = document.createElement("span"); span.className = "ty"; span.innerHTML = ICO(k);
+    span.appendChild(document.createTextNode(txt)); return span;
+  }
   var BOLT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.6 1.8 3.9 13.6h6.6l-1.3 8.6 10-12.4h-6.8z"/></svg>';
   var DEMO = {
     ok: true, demo: true, updated: null, invite: null,
@@ -213,7 +222,8 @@
         s.innerHTML = BOLT;
         var box = document.createElement("span"); box.className = "slot-txt";
         var t = document.createElement("b");
-        t.textContent = "Platz " + sl.n + (sl.busy ? " · " + (sl.type || "Projekt in Arbeit") : ": frei");
+        t.textContent = "Platz " + sl.n + (sl.busy ? " · " : ": frei");
+        if (sl.busy) t.appendChild(typeEl(sl.type || "Projekt in Arbeit"));
         box.appendChild(t);
         if (sl.busy && typeof sl.seconds === "number") {
           var c = document.createElement("small");
@@ -267,7 +277,7 @@
         item.appendChild(st);
         if (r.text) { var qq = document.createElement("q"); qq.textContent = r.text; item.appendChild(qq); }
         var meta = document.createElement("div"); meta.className = "rev-meta";
-        var m1 = document.createElement("span"); m1.textContent = r.type || "Projekt"; meta.appendChild(m1);
+        meta.appendChild(typeEl(r.type || "Projekt"));
         if (r.month && /^\d{4}-\d{2}$/.test(r.month)) {
           var m2 = document.createElement("span"); var p = r.month.split("-"); m2.textContent = p[1] + "/" + p[0]; meta.appendChild(m2);
         }
